@@ -12,7 +12,7 @@
 		resetting = true;
 		try {
 			await api.post('/v1/demo/reset');
-			toast.success('Demo reset — reloading…');
+			toast.success('Demo reset · reloading…');
 			window.location.href = '/admin/';
 		} catch (e: any) {
 			toast.error(e.message ?? 'Reset failed');
@@ -32,10 +32,10 @@
 
 <div class="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
 	<p>
-		<span class="font-semibold">Public demo</span> — data here is visible to everyone and resets
+		<span class="font-semibold">Public demo</span> · data here is visible to everyone and resets
 		automatically. Don't enter anything private.
 		<a
-			href="https://github.com/Calnode/calnode"
+			href="https://github.com/OpenSlot/calnode"
 			target="_blank"
 			rel="noopener noreferrer"
 			class="ml-1 font-medium underline"

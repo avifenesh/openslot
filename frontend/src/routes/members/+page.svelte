@@ -40,7 +40,7 @@
 		confirmOpen = true;
 	}
 
-	// Password reset — keyed by user id
+	// Password reset · keyed by user id
 	let resetTarget = $state<string | null>(null);
 	let resetPassword = $state('');
 	let resetting = $state(false);
@@ -122,11 +122,11 @@
 			if (res.email_sent) {
 				toast.success(`Invite re-sent to ${res.email}`);
 			} else {
-				// No SMTP configured — surface the fresh link so the admin can send it manually.
+				// No SMTP configured · surface the fresh link so the admin can send it manually.
 				showInvite = true;
 				inviteResult = {
 					invite_url: res.invite_url, email: res.email, email_sent: false,
-					note: 'Email is not configured — copy this link and send it manually.'
+					note: 'Email is not configured · copy this link and send it manually.'
 				};
 				toast.success(`New link generated for ${res.email}`);
 			}
@@ -170,7 +170,7 @@
 			} else {
 				openConfirm({
 					title: `Archive ${m.name}?`,
-					description: 'They lose access immediately and their event types are deactivated. Their record and history are kept — you can restore them later.',
+					description: 'They lose access immediately and their event types are deactivated. Their record and history are kept · you can restore them later.',
 					confirmText: 'Archive',
 					action: () => doArchive(m.id)
 				});
@@ -340,7 +340,7 @@
 				</div>
 			{/each}
 			{#if reassignTargets.length === 0}
-				<p class="text-xs text-muted-foreground">No other active members to reassign to — meetings can only be cancelled.</p>
+				<p class="text-xs text-muted-foreground">No other active members to reassign to · meetings can only be cancelled.</p>
 			{/if}
 		</div>
 
@@ -355,7 +355,7 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<svelte:head><title>Members — Calnode</title></svelte:head>
+<svelte:head><title>Members · OpenSlot</title></svelte:head>
 
 <div class="mb-8 flex items-center justify-between">
 	<div>
@@ -380,7 +380,7 @@
 				{#if inviteResult.email_sent}
 					<p class="mb-3 text-xs text-amber-700">An invite email has been sent to {inviteResult.email}.</p>
 				{:else}
-					<p class="mb-3 text-xs text-amber-700">SMTP is not configured — share this link directly with {inviteResult.email}.</p>
+					<p class="mb-3 text-xs text-amber-700">SMTP is not configured · share this link directly with {inviteResult.email}.</p>
 				{/if}
 				<div class="flex items-center gap-2">
 					<code class="flex-1 overflow-x-auto rounded border bg-white px-2 py-1.5 text-xs font-mono text-gray-800">{inviteResult.invite_url}</code>
@@ -477,7 +477,7 @@
 									{#if m.handle}
 										<a href="/u/{m.handle}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline font-mono">/u/{m.handle}</a>
 									{:else}
-										<span class="text-xs text-muted-foreground/50" title="No public page — set a handle in their profile">—</span>
+										<span class="text-xs text-muted-foreground/50" title="No public page · set a handle in their profile">—</span>
 									{/if}
 								</td>
 								<td class="px-4 py-3">
@@ -577,7 +577,7 @@
 				</table>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Resend mints a fresh link, resets the 7-day expiry, and re-emails it — the previous link stops working.
+				Resend mints a fresh link, resets the 7-day expiry, and re-emails it · the previous link stops working.
 			</p>
 		</div>
 	{/if}

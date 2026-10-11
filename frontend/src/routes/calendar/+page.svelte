@@ -15,14 +15,14 @@
 		caldav: 'CalDAV (Apple iCloud, Fastmail, Nextcloud)'
 	};
 
-	// Where to send an admin for each provider Calnode supports but this instance hasn't
+	// Where to send an admin for each provider OpenSlot supports but this instance hasn't
 	// been given credentials for. Google is self-serve (a settings page); Microsoft is
 	// currently env-var-only, so it points at the docs instead of a form.
 	const UNCONFIGURED_SETUP: Record<string, { text: string; href: string; external?: boolean }> = {
 		google: { text: 'Set up in Settings → Google OAuth', href: '/admin/settings/google' },
 		microsoft: {
 			text: 'See setup docs',
-			href: 'https://github.com/Calnode/calnode/blob/main/.env.example',
+			href: 'https://github.com/OpenSlot/calnode/blob/main/.env.example',
 			external: true
 		}
 	};
@@ -125,7 +125,7 @@
 	let pickerLoading = $state(false);
 	let pickerSaving = $state(false);
 	let pickerErr = $state('');
-	// Connection ids whose provider reported a dead OAuth grant (409) — flagged for reconnect.
+	// Connection ids whose provider reported a dead OAuth grant (409) · flagged for reconnect.
 	let reauthNeeded = $state<Set<string>>(new Set());
 
 	// The picker is keyed on account identity (provider + account_email), not the connection id —
@@ -161,7 +161,7 @@
 
 	// Exclusive within this account's list, but clearable: selecting the current
 	// destination again removes it (plain radios can't express "none", and the
-	// backend accepts a save with no destination — writes then fall back to the
+	// backend accepts a save with no destination · writes then fall back to the
 	// account's bound calendar). The backend clears the flag across every other
 	// account when it saves, so the UI only has to keep this list consistent.
 	function pickDestination(chosen: CalendarPick) {
@@ -247,7 +247,7 @@
 <ConfirmDialog
 	bind:open={disconnectOpen}
 	title="Disconnect this calendar?"
-	description="Calnode will stop checking it for conflicts. If it was your booking calendar, another connected calendar is promoted automatically."
+	description="OpenSlot will stop checking it for conflicts. If it was your booking calendar, another connected calendar is promoted automatically."
 	confirmText="Disconnect"
 	destructive
 	onConfirm={doDisconnect}
@@ -262,7 +262,7 @@
 	onConfirm={doZoomDisconnect}
 />
 
-<svelte:head><title>Calendar — Calnode</title></svelte:head>
+<svelte:head><title>Calendar · OpenSlot</title></svelte:head>
 
 <div class="mb-8">
 	<h1 class="text-2xl font-semibold tracking-tight">Calendar</h1>
@@ -302,7 +302,7 @@
 								<p class="truncate font-medium">{c.account_email || label(c.provider)}</p>
 								<p class="text-xs text-muted-foreground">{label(c.provider)} · checked for conflicts</p>
 								{#if reauthNeeded.has(c.id)}
-									<p class="text-xs font-medium text-destructive">Reconnect needed — disconnect and connect again.</p>
+									<p class="text-xs font-medium text-destructive">Reconnect needed · disconnect and connect again.</p>
 								{/if}
 							</div>
 						</div>
@@ -426,7 +426,7 @@
 									<Input id="caldav-pass" type="password" autocomplete="off" bind:value={caldavPass} />
 									{#if appPwHelp[caldavPreset]}
 										<p class="text-xs text-muted-foreground">
-											<a class="underline" href={appPwHelp[caldavPreset].href} target="_blank" rel="noopener noreferrer">{appPwHelp[caldavPreset].label}</a> — your normal password won't work.
+											<a class="underline" href={appPwHelp[caldavPreset].href} target="_blank" rel="noopener noreferrer">{appPwHelp[caldavPreset].label}</a> · your normal password won't work.
 										</p>
 									{:else}
 										<p class="text-xs text-muted-foreground">Use an app password from your provider, not your login password.</p>
@@ -480,7 +480,7 @@
 	</div>
 {/if}
 
-<!-- Zoom — per-host meeting links (independent of the calendar) -->
+<!-- Zoom · per-host meeting links (independent of the calendar) -->
 {#if zoom?.configured && !$authStatus.demo_mode}
 	<div class="mt-10">
 		<h2 class="text-lg font-semibold tracking-tight">Zoom</h2>

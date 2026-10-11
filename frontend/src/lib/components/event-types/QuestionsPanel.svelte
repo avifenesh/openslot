@@ -44,7 +44,7 @@
 
 	// This panel is only mounted once the parent's "Questions" tab is selected
 	// ({#if activeTab === 'questions'}), so it must fetch its own data on mount
-	// rather than relying on the parent to trigger a load — previously nothing
+	// rather than relying on the parent to trigger a load · previously nothing
 	// called loadQuestions() until a mutation (add/save/delete) did so as a
 	// side effect, which is why existing questions never showed up until you
 	// added a new one.

@@ -1,10 +1,13 @@
 # Binaries (anchored to repo root so cmd/calnode/ source is not ignored)
 /calnode
 /calnode.exe
+/openslot
+/artifacts/
 
 # Local Claude Code tooling: per-developer dev-server config (launch.json) and the
 # machine-specific permission allowlist (settings.local.json) — never shared.
 /.claude/
+/frontend/.playwright/
 
 # Internal/strategy docs (PRD, roadmap, planning notes) — never published.
 # /docs/ itself is tracked normally; it's the public-facing reference set.

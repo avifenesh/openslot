@@ -28,7 +28,7 @@
 		return mm === 0 ? `${h12}${ampm}` : `${h12}:${String(mm).padStart(2,'0')}${ampm}`;
 	}
 
-	// ── Weekly rules — 7-day model ────────────────────────────────────────────────
+	// ── Weekly rules · 7-day model ────────────────────────────────────────────────
 	type DayBlock = { id: string; start_time: string; end_time: string; saving: boolean; error: string }
 	type DayState = { day_of_week: number; blocks: DayBlock[]; error: string }
 
@@ -67,7 +67,7 @@
 	async function addBlock(day: DayState) {
 		day.blocks.push({ id: '', start_time: '09:00', end_time: '17:00', saving: true, error: '' });
 		// Operate on the element AS STORED in the reactive array (a proxy), not the literal we
-		// pushed — Svelte 5 proxies pushed objects, so mutating the local literal wouldn't update
+		// pushed · Svelte 5 proxies pushed objects, so mutating the local literal wouldn't update
 		// the UI (the "saving…" stuck-until-refresh bug).
 		const block = day.blocks[day.blocks.length - 1];
 		try {
@@ -305,7 +305,7 @@
 	onConfirm={doDeleteGroup}
 />
 
-<svelte:head><title>Availability — Calnode</title></svelte:head>
+<svelte:head><title>Availability · OpenSlot</title></svelte:head>
 
 <div class="mb-8">
 	<h1 class="text-2xl font-semibold tracking-tight">Availability</h1>
@@ -413,7 +413,7 @@
 	<div class="rounded-lg border bg-card">
 		{#if overridesError}<p class="px-4 pt-4 text-sm text-destructive">{overridesError}</p>{/if}
 		{#if overlappingOverrideDates.length > 0}
-			<p class="px-4 pt-4 text-xs text-amber-700">Overlapping blocks on {overlappingOverrideDates.map((d) => fmtDate(d, $prefs)).join(', ')} merge into one window — trim them if that wasn't the intent.</p>
+			<p class="px-4 pt-4 text-xs text-amber-700">Overlapping blocks on {overlappingOverrideDates.map((d) => fmtDate(d, $prefs)).join(', ')} merge into one window · trim them if that wasn't the intent.</p>
 		{/if}
 
 		{#if overridesLoading}

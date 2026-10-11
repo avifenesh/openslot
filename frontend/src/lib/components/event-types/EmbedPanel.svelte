@@ -9,10 +9,10 @@
 	// instance origin is all the snippet needs.
 	const embedOrigin = $derived($page.url.origin);
 	const inlineSnippet = $derived(
-		`<script src="${embedOrigin}/embed.js" async><\/script>\n<calnode-booking slug="${slug}"></calnode-booking>`
+		`<script src="${embedOrigin}/embed.js" async><\/script>\n<openslot-booking slug="${slug}"></openslot-booking>`
 	);
 	const popupSnippet = $derived(
-		`<script src="${embedOrigin}/embed.js" async><\/script>\n<button data-calnode-popup="${slug}">Book a call</button>`
+		`<script src="${embedOrigin}/embed.js" async><\/script>\n<button data-openslot-popup="${slug}">Book a call</button>`
 	);
 	let copied = $state('');
 	function copyEmbed(kind: string, text: string) {
@@ -26,7 +26,7 @@
 <!-- Embed -->
 <div class="mt-8">
 	<h2 class="mb-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Embed</h2>
-	<p class="mb-3 text-sm text-muted-foreground">Drop this booking widget on your website — it renders inline, no iframe. Paste before <code>&lt;/body&gt;</code>.</p>
+	<p class="mb-3 text-sm text-muted-foreground">Drop this booking widget on your website · it renders inline, no iframe. Paste before <code>&lt;/body&gt;</code>.</p>
 	<div class="space-y-5 rounded-lg border bg-card p-6">
 		{#each [{ key: 'inline', label: 'Inline', hint: 'Embeds the booking calendar directly in the page.', code: inlineSnippet }, { key: 'popup', label: 'Popup button', hint: 'A button that opens the booking widget in a modal.', code: popupSnippet }] as snip}
 			<div>

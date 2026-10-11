@@ -22,8 +22,8 @@ import (
 // same internal services the REST handlers use — no parallel code path.
 func (h *Handler) MCPServer() *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{
-		Name:    "calnode",
-		Title:   "Calnode booking",
+		Name:    "openslot",
+		Title:   "OpenSlot scheduling",
 		Version: buildinfo.Get().Version,
 	}, nil)
 

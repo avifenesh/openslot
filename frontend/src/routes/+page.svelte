@@ -1,274 +1,71 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
-	import { api, type CalendarStatus, type AvailabilityRule, type EventType, type User } from '$lib/api';
-	import { authStatus } from '$lib/stores';
-
-	let calendarConnected = $state(false);
-	let calendarConfigured = $state(true);
-	let hasAvailability = $state(false);
-	let hasEventType = $state(false);
-	let eventLinks = $state<{ slug: string; name: string }[]>([]);
-	let myHandle = $state('');
-	let origin = $state('');
+	import { ArrowRight, Calendar, Check, Clock, Copy, ExternalLink, Link, Plus, Plug, Code } from '@lucide/svelte';
+	import { api, type CalendarStatus, type AvailabilityRule, type EventType, type Booking } from '$lib/api';
+	import { currentUser, authStatus } from '$lib/stores';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import { toast } from 'svelte-sonner';
 	let loading = $state(true);
-	let copiedSlug = $state<string | null>(null);
-	let copyFailed = $state(false);
-	let copyTimer: ReturnType<typeof setTimeout> | null = null;
-
-	onMount(async () => {
+	let error = $state('');
+	let origin = $state('');
+	let calendar = $state<CalendarStatus | null>(null);
+	let events = $state<EventType[]>([]);
+	let meetings = $state<Booking[]>([]);
+	let upcoming = $state(0);
+	let rules = $state<AvailabilityRule[]>([]);
+	const activeEvents = $derived(events.filter(event => event.is_active && !event.archived));
+	const steps = $derived([
+		{ label: 'Connect your calendar', detail: 'Keep your busy times in sync.', done: !!calendar?.connected, href: `${base}/calendar`, icon: Calendar },
+		{ label: 'Choose your hours', detail: 'Make space for the rest of your day.', done: rules.length > 0, href: `${base}/availability`, icon: Clock },
+		{ label: 'Create a meeting link', detail: 'One link. No back-and-forth.', done: activeEvents.length > 0, href: `${base}/event-types`, icon: Link },
+	]);
+	const completed = $derived(steps.filter(step => step.done).length);
+	onMount(load);
+	async function load() {
 		origin = window.location.origin;
+		error = ''; loading = true;
 		try {
-			const [cal, rules, events, me] = await Promise.all([
-				api.get<CalendarStatus>('/v1/calendar/status').catch(() => ({ connected: false, configured: false })),
-				api.get<{ items: AvailabilityRule[] }>('/v1/availability-rules').catch(() => ({ items: [] })),
-				api.get<{ items: EventType[] }>('/v1/event-types').catch(() => ({ items: [] })),
-				api.get<User>('/v1/users/me').catch(() => null)
+			const [cal, availability, types, bookings] = await Promise.all([
+				api.get<CalendarStatus>('/v1/calendar/status'),
+				api.get<{ items: AvailabilityRule[] }>('/v1/availability-rules'),
+				api.get<{ items: EventType[] }>('/v1/event-types'),
+				api.get<{ items: Booking[]; counts: {upcoming: number} }>('/v1/bookings?when=upcoming&status=confirmed&order=asc&limit=4'),
 			]);
-			myHandle = me?.handle ?? '';
-			calendarConfigured = cal.configured !== false;
-			calendarConnected = cal.connected;
-			hasAvailability = (rules.items?.length ?? 0) > 0;
-			hasEventType = (events.items?.length ?? 0) > 0;
-			eventLinks = (events.items ?? []).filter((e) => e.slug).map((e) => ({ slug: e.slug, name: e.name }));
-		} finally {
-			loading = false;
-		}
-	});
-
-	onDestroy(() => {
-		if (copyTimer !== null) clearTimeout(copyTimer);
-	});
-
-	const calendarDone = $derived(calendarConnected);
-	// Calendar connect is disabled in the demo (see calendar.go's demoMode guard), so the
-	// checklist treats it the same as "not configured" — required, forever-incomplete, and
-	// pointing at a dead-end connect flow otherwise.
-	const calendarRequired = $derived(calendarConfigured && !$authStatus.demo_mode);
-	const allDone = $derived((!calendarRequired || calendarDone) && hasAvailability && hasEventType);
-	const bookingUrl = (slug: string) => (slug && origin ? `${origin}/book/${slug}` : '');
-
-	async function copyText(text: string, key: string) {
-		if (!text) return;
-		try {
-			await navigator.clipboard.writeText(text);
-			copiedSlug = key;
-			copyFailed = false;
-		} catch {
-			copyFailed = true;
-			copiedSlug = null;
-		}
-		if (copyTimer !== null) clearTimeout(copyTimer);
-		copyTimer = setTimeout(() => { copiedSlug = null; copyFailed = false; }, 2000);
+			calendar = cal; rules = availability.items ?? []; events = types.items ?? [];
+			meetings = bookings.items ?? []; upcoming = bookings.counts?.upcoming ?? meetings.length;
+		} catch (e) { error = e instanceof Error ? e.message : 'Could not load your workspace.'; }
+		finally { loading = false; }
 	}
-
-	function copyLink(slug: string) {
-		return copyText(bookingUrl(slug), slug);
+	async function copy(slug: string) {
+		try { await navigator.clipboard.writeText(`${origin}/book/${slug}`); toast.success('Booking link copied'); }
+		catch { toast.error('Could not copy. Open the booking page to copy its address.'); }
+	}
+	function date(iso: string, options: Intl.DateTimeFormatOptions) {
+		return new Date(iso).toLocaleString(undefined, { ...options, timeZone: $currentUser?.timezone || 'UTC' });
 	}
 </script>
 
-<svelte:head><title>Dashboard — Calnode</title></svelte:head>
-
-{#if loading}
-	<p class="py-8 text-sm text-muted-foreground">Loading…</p>
-{:else if allDone}
-	<div class="mb-8">
-		<h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Your booking page is live and ready to share.</p>
-	</div>
-	{#if eventLinks.length === 1}
-		<div class="rounded-lg border bg-card px-5 py-4">
-			<p class="text-sm font-medium mb-2">Your booking link</p>
-			<div class="flex items-center gap-2">
-				<a
-					href={bookingUrl(eventLinks[0].slug)}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="truncate text-sm text-primary hover:underline font-mono"
-				>
-					{bookingUrl(eventLinks[0].slug)}
-				</a>
-				<button
-					onclick={() => copyLink(eventLinks[0].slug)}
-					class="shrink-0 rounded px-2 py-0.5 text-xs border bg-background hover:bg-muted transition-colors
-						{copyFailed ? 'border-destructive text-destructive' : ''}"
-				>
-					{copiedSlug === eventLinks[0].slug ? 'Copied!' : copyFailed ? 'Failed' : 'Copy'}
-				</button>
-			</div>
-		</div>
-	{:else if eventLinks.length > 1}
-		<div class="rounded-lg border bg-card px-5 py-4">
-			<p class="text-sm font-medium mb-2">Your booking links</p>
-			<div class="space-y-2">
-				{#each eventLinks as e (e.slug)}
-					<div class="flex items-center gap-2">
-						<span class="shrink-0 truncate text-sm text-muted-foreground">{e.name}</span>
-						<a
-							href={bookingUrl(e.slug)}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="truncate text-sm text-primary hover:underline font-mono"
-						>
-							{bookingUrl(e.slug)}
-						</a>
-						<button
-							onclick={() => copyLink(e.slug)}
-							class="shrink-0 rounded px-2 py-0.5 text-xs border bg-background hover:bg-muted transition-colors
-								{copyFailed ? 'border-destructive text-destructive' : ''}"
-						>
-							{copiedSlug === e.slug ? 'Copied!' : copyFailed ? 'Failed' : 'Copy'}
-						</button>
-					</div>
-				{/each}
-			</div>
-		</div>
+<svelte:head><title>Overview | OpenSlot</title></svelte:head>
+<div class="page-heading"><div><p class="eyebrow">A LITTLE LESS BACK-AND-FORTH</p><h1>Your time, well spent.</h1><p>Welcome back{$currentUser?.name ? `, ${$currentUser.name.split(' ')[0]}` : ''}. Here’s what’s coming up.</p></div><a class={buttonVariants()} href={`${base}/event-types`}><Plus size={17}/> New meeting type</a></div>
+{#if error}<div class="error-panel" role="alert"><p>{error}</p><Button variant="outline" onclick={load}>Try again</Button></div>{/if}
+{#if loading}<div class="surface loading-panel" role="status">Loading your schedule…</div>{:else if !error}
+	{#if completed < 3}
+	<section class="setup-panel" aria-labelledby="setup-heading"><div class="setup-title"><div><span class="eyebrow">MAKE IT YOURS</span><h2 id="setup-heading">Your booking page starts here.</h2><p>{completed} of 3 steps complete{$authStatus.demo_mode ? ' · Sample workspace' : ''}</p></div><span class="setup-progress" aria-label={`${completed} of 3 setup steps complete`}>{completed}<small>/ 3</small></span></div>
+		<div class="setup-steps">{#each steps as step, i}<a href={step.href} class:done={step.done}><span class="step-number">{#if step.done}<Check size={17}/>{:else}{i + 1}{/if}</span><div><strong>{step.label}</strong><p>{step.detail}</p></div><ArrowRight size={17}/></a>{/each}</div>
+		{#if !calendar?.connected}<p class="setup-footnote">Your booking rules work now. Connect a calendar to also check meetings booked elsewhere.</p>{/if}
+	</section>
 	{/if}
-	{#if myHandle && origin}
-		<div class="rounded-lg border bg-card px-5 py-4">
-			<p class="text-sm font-medium mb-2">Your profile page</p>
-			<div class="flex items-center gap-2">
-				<a
-					href={`${origin}/u/${myHandle}`}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="truncate text-sm text-primary hover:underline font-mono"
-				>
-					{origin}/u/{myHandle}
-				</a>
-				<button
-					onclick={() => copyText(`${origin}/u/${myHandle}`, `u/${myHandle}`)}
-					class="shrink-0 rounded px-2 py-0.5 text-xs border bg-background hover:bg-muted transition-colors
-						{copyFailed ? 'border-destructive text-destructive' : ''}"
-				>
-					{copiedSlug === `u/${myHandle}` ? 'Copied!' : copyFailed ? 'Failed' : 'Copy'}
-				</button>
-			</div>
-		</div>
-	{/if}
-{:else}
-	<div class="mb-8">
-		<h1 class="text-2xl font-semibold tracking-tight">Getting started</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Complete these steps and you'll be ready to take bookings.</p>
+	<div class="overview-grid">
+		<section class="surface meetings-panel"><div class="section-heading"><div><span class="eyebrow">ON THE HORIZON</span><h2>Upcoming meetings <span class="count-pill">{upcoming}</span></h2></div><a href={`${base}/bookings`} class="text-link">View all <ArrowRight size={15}/></a></div>
+			{#if meetings.length === 0}<div class="empty-schedule"><span class="empty-icon"><Calendar size={28} strokeWidth={1.5}/></span><h3>A little breathing room.</h3><p>Share a meeting link and your next booking will appear here.</p><a class={buttonVariants({ variant: 'outline' })} href={`${base}/share`}>Share your availability <ArrowRight size={16}/></a></div>
+			{:else}<div class="meeting-list">{#each meetings as meeting}<a class="meeting-row" href={`${base}/bookings`}><span class="date-tile"><small>{date(meeting.start_at, {month:'short'})}</small><strong>{date(meeting.start_at, {day:'numeric'})}</strong></span><div class="meeting-description"><strong>{events.find(e => e.slug === meeting.event_type_slug)?.name ?? meeting.event_type_slug}</strong><p>{meeting.attendees?.map(a => a.name).join(', ') || 'Booked guest'}</p></div><div class="meeting-time"><strong>{date(meeting.start_at, {hour:'numeric',minute:'2-digit',hour12:$currentUser?.time_format !== '24h'})}</strong><small>{date(meeting.start_at, {weekday:'long'})}</small></div></a>{/each}</div><div class="panel-footer"><Clock size={14}/> Times shown in {$currentUser?.timezone ?? 'UTC'}</div>{/if}
+		</section>
+		<section class="surface links-panel"><div class="section-heading"><div><span class="eyebrow">READY TO SHARE</span><h2>Your meeting links</h2></div><Link size={19}/></div>
+			{#if activeEvents.length === 0}<div class="empty-links"><p>Start with the kind of meeting you have most often.</p><a class={buttonVariants({variant:'outline'})} href={`${base}/event-types`}><Plus size={16}/> Create a meeting type</a></div>{:else}<div class="event-link-list">{#each activeEvents.slice(0, 4) as event, i}<div class="event-link"><span class="event-marker" style={`--marker:var(--event-${i % 3})`}></span><div><a href={`${base}/event-types/${event.slug}`}><strong>{event.name}</strong></a><p>{event.duration_minutes} min · {event.is_public ? 'Public link' : 'Private link'}</p></div><Button variant="ghost" size="icon" aria-label={`Copy ${event.name} link`} onclick={() => copy(event.slug)}><Copy size={16}/></Button><a class={buttonVariants({variant:'ghost',size:'icon'})} href={`${origin}/book/${event.slug}`} target="_blank" rel="noopener noreferrer" aria-label={`Preview ${event.name}`}><ExternalLink size={16}/></a></div>{/each}</div>{/if}
+			<a href={`${base}/event-types`} class="panel-footer text-link">Manage meeting types <ArrowRight size={15}/></a>
+		</section>
 	</div>
-
-	<!-- Checklist -->
-	<div class="rounded-lg border bg-card divide-y">
-		<!-- Calendar (hidden in the demo — connect is disabled there) -->
-		{#if !$authStatus.demo_mode}
-		<a
-			href="{base}/{calendarConfigured ? 'calendar' : 'settings/google'}"
-			class="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40 group"
-		>
-			<div class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2
-				{calendarConnected ? 'border-primary bg-primary' : 'border-muted-foreground/40 group-hover:border-primary/60'}">
-				{#if calendarConnected}
-					<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				{/if}
-			</div>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-medium {calendarConnected ? 'text-muted-foreground line-through' : ''}">
-					Connect your calendar
-				</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">
-					{calendarConfigured ? 'Calnode checks your calendar to prevent double-bookings.' : 'Google Calendar setup required — see the Calendar page for details.'}
-				</p>
-			</div>
-			<svg class="mt-0.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="9 18 15 12 9 6"/>
-			</svg>
-		</a>
-		{/if}
-
-		<!-- Availability -->
-		<a
-			href="{base}/availability"
-			class="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40 group"
-		>
-			<div class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2
-				{hasAvailability ? 'border-primary bg-primary' : 'border-muted-foreground/40 group-hover:border-primary/60'}">
-				{#if hasAvailability}
-					<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				{/if}
-			</div>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-medium {hasAvailability ? 'text-muted-foreground line-through' : ''}">
-					Set your availability
-				</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">
-					Define the hours when people can book time with you.
-				</p>
-			</div>
-			<svg class="mt-0.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="9 18 15 12 9 6"/>
-			</svg>
-		</a>
-
-		<!-- Event type -->
-		<a
-			href="{base}/event-types"
-			class="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40 group"
-		>
-			<div class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2
-				{hasEventType ? 'border-primary bg-primary' : 'border-muted-foreground/40 group-hover:border-primary/60'}">
-				{#if hasEventType}
-					<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				{/if}
-			</div>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-medium {hasEventType ? 'text-muted-foreground line-through' : ''}">
-					Create your first event type
-				</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">
-					An event type defines the duration, location, and availability for a booking.
-				</p>
-			</div>
-			<svg class="mt-0.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="9 18 15 12 9 6"/>
-			</svg>
-		</a>
-
-		<!-- Booking link -->
-		<div class="flex items-start gap-4 px-5 py-4 {hasEventType ? '' : 'opacity-40'}">
-			<div class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2
-				{hasEventType ? 'border-primary bg-primary' : 'border-muted-foreground/40'}">
-				{#if hasEventType}
-					<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				{/if}
-			</div>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-medium">Share your booking link</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">
-					{hasEventType ? 'Your page is live. Share it and start taking bookings.' : "Available once you've created an event type."}
-				</p>
-				{#if hasEventType && eventLinks.length > 0}
-					<div class="mt-2 flex items-center gap-2">
-						<a
-							href={bookingUrl(eventLinks[0].slug)}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="truncate text-xs text-primary hover:underline font-mono"
-						>
-							{bookingUrl(eventLinks[0].slug)}
-						</a>
-						<button
-							onclick={() => copyLink(eventLinks[0].slug)}
-							class="shrink-0 rounded px-2 py-0.5 text-xs border bg-background hover:bg-muted transition-colors
-								{copyFailed ? 'border-destructive text-destructive' : ''}"
-						>
-							{copiedSlug === eventLinks[0].slug ? 'Copied!' : copyFailed ? 'Failed' : 'Copy'}
-						</button>
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
+	<section class="connection-grid" aria-label="Make OpenSlot work for you"><a class="connection-card" href={`${base}/agent`}><span class="feature-icon"><Plug size={23}/></span><div><span class="eyebrow">BRING YOUR OWN</span><h3>Let your agent handle it.</h3><p>Connect the agent you already use to your real availability and bookings.</p><span class="text-link">Connect an agent <ArrowRight size={16}/></span></div></a><a class="connection-card warm" href={`${base}/share`}><span class="feature-icon"><Code size={23}/></span><div><span class="eyebrow">RIGHT WHERE YOU NEED IT</span><h3>Your calendar, on your site.</h3><p>Drop a booking calendar or a simple button into any website.</p><span class="text-link">Get your embed <ArrowRight size={16}/></span></div></a></section>
+	<p class="quiet-footer"><span class="status-dot"></span>Free software. No feature tiers. Made to fit your day.</p>
 {/if}

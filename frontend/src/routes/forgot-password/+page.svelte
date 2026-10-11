@@ -13,7 +13,7 @@
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		const addr = email.trim().toLowerCase();
-		// Require a valid address up front — otherwise the request silently no-ops
+		// Require a valid address up front · otherwise the request silently no-ops
 		// (the endpoint returns the same generic message), which looks broken.
 		if (!isValidEmail(addr)) {
 			error = 'Enter a valid email address first.';
@@ -39,7 +39,7 @@
 	}
 </script>
 
-<svelte:head><title>Forgot password — Calnode</title></svelte:head>
+<svelte:head><title>Forgot password · OpenSlot</title></svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-muted/30 p-6">
 	<div class="w-full max-w-sm">

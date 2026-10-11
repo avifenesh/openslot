@@ -1,320 +1,141 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
+	import type { Snippet } from 'svelte';
+	import { Calendar, Clock, Link, Plug, Settings, Sun, Moon, Menu, X, LogOut, Users, Webhook, LayoutDashboard, Video } from '@lucide/svelte';
 	import '../app.css';
 	import { api, type User } from '$lib/api';
 	import { currentUser, authStatus, type AuthStatus } from '$lib/stores';
 	import { prefs, prefsFromUser } from '$lib/prefs';
 	import { Toaster } from '$lib/components/ui/sonner';
-	import { buttonVariants } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '$lib/components/ui/button';
 	import DemoBanner from '$lib/components/demo-banner.svelte';
-	import type { Snippet } from 'svelte';
-
 	let { children }: { children: Snippet } = $props();
-
 	let checking = $state(true);
-	let reportOpen = $state(false);
+	let menuOpen = $state(false);
+	let dark = $state(false);
+	let moreOpen = $state(false);
+	let mobile = $state(false);
 	let recordingsConfigured = $state(false);
-	let version = $state('');
-
-	const ISSUES_URL = 'https://github.com/Calnode/calnode/issues';
-	const NEW_ISSUE_URL = 'https://github.com/Calnode/calnode/issues/new/choose';
-	const RELEASES_URL = 'https://github.com/Calnode/calnode/releases';
-
-	const isLogin = $derived($page.route.id === '/login');
-	const isPublicRoute = $derived(
-		$page.route.id === '/login' ||
-		$page.route.id === '/claim' ||
-		$page.route.id === '/forgot-password' ||
-		$page.route.id === '/reset-password' ||
-		$page.route.id === '/invite/[token]'
-	);
-
-	const navItems = [
-		{
-			section: 'Scheduling',
-			href: `${base}/`,
-			label: 'Home',
-			adminOnly: false,
-			exact: true,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`
-		},
-		{
-			section: 'Scheduling',
-			href: `${base}/event-types`,
-			label: 'Event Types',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`
-		},
-		{
-			section: 'Scheduling',
-			href: `${base}/availability`,
-			label: 'Availability',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
-		},
-		{
-			section: 'Scheduling',
-			href: `${base}/bookings`,
-			label: 'Bookings',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
-		},
-		{
-			section: 'Scheduling',
-			href: `${base}/calendar`,
-			label: 'Calendar',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="8" y="14" width="2" height="2"/><rect x="13" y="14" width="2" height="2"/></svg>`
-		},
-		{
-			section: 'Team',
-			href: `${base}/recordings`,
-			label: 'Recordings',
-			adminOnly: true,
-			requiresFeature: 'recordings',
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
-		},
-		{
-			section: 'Team',
-			href: `${base}/members`,
-			label: 'Members',
-			adminOnly: true,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
-		},
-		{
-			section: 'Team',
-			href: `${base}/teams`,
-			label: 'Teams',
-			adminOnly: true,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 19a6 6 0 0 0-12 0"/><circle cx="8" cy="9" r="4"/><path d="M22 19a6 6 0 0 0-6-6 4 4 0 1 0-3-7"/></svg>`
-		},
-		{
-			section: 'Developer',
-			href: `${base}/api-keys`,
-			label: 'API Keys',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`
-		},
-		{
-			section: 'Developer',
-			href: `${base}/connections`,
-			label: 'Connected apps',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>`
-		},
-		{
-			section: 'Developer',
-			href: `${base}/webhooks`,
-			label: 'Webhooks',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`
-		},
-		{
-			section: null,
-			href: `${base}/settings`,
-			label: 'Settings',
-			adminOnly: false,
-			icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
-		}
+	const isPublicRoute = $derived(['/login', '/claim', '/forgot-password', '/reset-password', '/invite/[token]'].includes($page.route.id ?? ''));
+	const navigation = [
+		{ path: '/', label: 'Overview', icon: LayoutDashboard },
+		{ path: '/bookings', label: 'Bookings', icon: Calendar },
+		{ path: '/event-types', label: 'Meeting types', icon: Link },
+		{ path: '/availability', label: 'Availability', icon: Clock },
 	];
-
-	const visibleNavItems = $derived(
-		navItems.filter(
-			(item) =>
-				(!item.adminOnly || $currentUser?.is_admin) &&
-				!($authStatus.demo_mode && item.label === 'Calendar') &&
-				(item.requiresFeature !== 'recordings' || recordingsConfigured)
-		)
-	);
-
+	const connections = [
+		{ path: '/calendar', label: 'Calendars', icon: Calendar },
+		{ path: '/agent', label: 'Your agent', icon: Plug },
+		{ path: '/share', label: 'Share & embed', icon: Link },
+	];
+	function active(path: string) {
+		return path === '/' ? $page.url.pathname === base || $page.url.pathname === `${base}/` : $page.url.pathname.startsWith(`${base}${path}`);
+	}
+	function setTheme(value: boolean) {
+		dark = value;
+		document.documentElement.classList.toggle('dark', value);
+		try { localStorage.setItem('openslot-theme', value ? 'dark' : 'light'); } catch { /* Theme still applies for this visit. */ }
+	}
+	onMount(() => {
+		const query = matchMedia('(max-width: 767px)');
+		const update = () => { mobile = query.matches; if (!mobile) menuOpen = false; };
+		update();
+		query.addEventListener('change', update);
+		return () => query.removeEventListener('change', update);
+	});
+	async function toggleMenu() {
+		menuOpen = !menuOpen;
+		await tick();
+		if (menuOpen) document.querySelector<HTMLAnchorElement>('#workspace-navigation nav a')?.focus();
+		else document.getElementById('navigation-toggle')?.focus();
+	}
+	function closeMenu() {
+		if (!menuOpen) return;
+		menuOpen = false;
+		document.getElementById('navigation-toggle')?.focus();
+	}
+	function navigationKey(event: KeyboardEvent) {
+		if (!mobile || !menuOpen) return;
+		if (event.key === 'Escape') { event.preventDefault(); closeMenu(); }
+		if (event.key !== 'Tab') return;
+		const controls = [document.getElementById('navigation-toggle'), ...document.querySelectorAll<HTMLElement>('#workspace-navigation a, #workspace-navigation button')].filter((el): el is HTMLElement => !!el && el.getClientRects().length > 0);
+		const index = controls.indexOf(document.activeElement as HTMLElement);
+		if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1)?.focus(); }
+		else if (!event.shiftKey && (index === -1 || index === controls.length - 1)) { event.preventDefault(); controls[0]?.focus(); }
+	}
 	onMount(async () => {
-		if (isPublicRoute) {
-			checking = false;
-			return;
-		}
+		let preference: string | null = null;
+		try { preference = localStorage.getItem('openslot-theme'); } catch { /* Private browsing may disable storage. */ }
+		setTheme(preference ? preference === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches);
+		if (isPublicRoute) { checking = false; return; }
 		try {
 			const me = await api.get<User>('/v1/users/me');
 			currentUser.set(me);
 			prefs.set(prefsFromUser(me));
-			if (me.is_admin) {
-				try {
-					const lk = await api.get<{ configured: boolean }>('/v1/settings/livekit');
-					recordingsConfigured = lk.configured;
-				} catch {
-					// Non-critical — Recordings just stays hidden from nav.
-				}
-			}
-		} catch {
-			window.location.href = '/admin/login';
-			return;
-		}
-		try {
 			authStatus.set(await api.get<AuthStatus>('/v1/auth/status'));
-		} catch {
-			// Non-critical — the demo banner and calendar/Zoom hiding just won't show.
-		}
-		try {
-			const v = await api.get<{ version: string }>('/version');
-			version = v.version;
-		} catch {
-			// Non-critical - the sidebar version link just won't show.
-		}
+			if (me.is_admin) {
+				try { recordingsConfigured = (await api.get<{configured: boolean}>('/v1/settings/livekit')).configured; }
+				catch { /* Optional recording configuration must not block scheduling. */ }
+			}
+		} catch { window.location.href = `${base}/login`; return; }
 		checking = false;
 	});
-
 	async function logout() {
-		await fetch('/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
-		window.location.href = '/admin/login';
-	}
-
-	function initials(name: string) {
-		return name
-			.split(' ')
-			.map((p) => p[0])
-			.join('')
-			.toUpperCase()
-			.slice(0, 2);
+		await api.post('/v1/auth/logout');
+		window.location.href = `${base}/login`;
 	}
 </script>
 
+<svelte:window onkeydown={navigationKey} />
 <Toaster position="bottom-right" />
+{#snippet navGroup(items: typeof navigation)}
+	{#each items as item}
+		<a href={`${base}${item.path}`} class:current={active(item.path)} aria-current={active(item.path) ? 'page' : undefined} onclick={() => menuOpen = false}>
+			<item.icon size={18} strokeWidth={1.7} /><span>{item.label}</span>
+		</a>
+	{/each}
+{/snippet}
 
 {#if isPublicRoute}
 	{@render children()}
 {:else if checking}
-	<div class="flex h-full items-center justify-center text-sm text-muted-foreground">
-		Loading…
-	</div>
+	<div class="loading-screen"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span><p>Opening your workspace…</p></div>
 {:else}
-	<div class="flex h-full flex-col">
-	{#if $authStatus.demo_mode}
-		<DemoBanner />
-	{/if}
-	<div class="flex flex-1 overflow-hidden">
-		<!-- Sidebar -->
-		<aside class="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-			<!-- User section -->
-			<a href="{base}/settings/profile" class="flex items-center gap-3 border-b border-sidebar-border px-4 py-3 hover:bg-sidebar-accent/60 transition-colors">
-				<!-- Fixed-size clip container: the image fills it and is clipped by the
-				     parent's overflow-hidden (not its own border-radius). A rounded,
-				     object-cover image on its own composited layer gets mis-painted by
-				     Chrome — a smeared tile over the sidebar — when the main panel
-				     repaints on scroll; clipping via the parent box prevents that. -->
-				<span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-					{#if $currentUser?.avatar_url}
-						<img src={$currentUser.avatar_url} alt={$currentUser.name} class="h-full w-full object-cover" />
-					{:else}
-						{initials($currentUser?.name ?? 'U')}
-					{/if}
-				</span>
-				<div class="min-w-0 flex-1">
-					<p class="truncate text-sm font-medium text-sidebar-foreground">{$currentUser?.name ?? ''}</p>
-				</div>
-			</a>
-
-			<!-- Nav -->
-			<nav class="flex-1 space-y-0.5 p-2">
-				{#each visibleNavItems as item, i}
-					{#if item.section && item.section !== visibleNavItems[i - 1]?.section}
-						<p class="mb-1 px-2.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/40 first:mt-0 mt-4">
-							{item.section}
-						</p>
-					{:else if !item.section && visibleNavItems[i - 1]?.section}
-						<div class="my-2 border-t border-sidebar-border"></div>
-					{/if}
-					{@const active = item.exact
-						? $page.url.pathname === item.href || $page.url.pathname === base
-						: $page.url.pathname.startsWith(item.href)}
-					<a
-						href={item.href}
-						class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors
-							{active
-								? 'bg-sidebar-accent text-sidebar-accent-foreground'
-								: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}"
-					>
-						<span class="shrink-0 {active ? 'opacity-100' : 'opacity-60'}">{@html item.icon}</span>
-						{item.label}
-					</a>
-				{/each}
-			</nav>
-
-			<!-- Footer -->
-			<div class="border-t border-sidebar-border p-2">
-				<button
-					onclick={() => (reportOpen = true)}
-					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/70"
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
-						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-					</svg>
-					Report an issue
-				</button>
-				<button
-					onclick={logout}
-					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
-						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-						<polyline points="16 17 21 12 16 7"/>
-						<line x1="21" y1="12" x2="9" y2="12"/>
-					</svg>
-					Sign out
-				</button>
-				{#if version}
-					<a
-						href={RELEASES_URL}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="mt-1 block px-2.5 py-1 text-xs text-sidebar-foreground/35 transition-colors hover:text-sidebar-foreground/60"
-					>
-						{version}
-					</a>
+	<div class="app-shell">
+		{#if $authStatus.demo_mode}<div class="demo-strip"><DemoBanner /></div>{/if}
+		<header class="mobile-bar">
+			<a class="brand" href={`${base}/`}>OpenSlot<span class="brand-dot">.</span></a>
+			<Button id="navigation-toggle" variant="ghost" size="icon" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} aria-controls="workspace-navigation" onclick={toggleMenu}>
+				{#if menuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
+			</Button>
+		</header>
+		{#if menuOpen}<button class="nav-scrim" tabindex="-1" aria-label="Close navigation" onclick={closeMenu}></button>{/if}
+		<aside class:mobile-open={menuOpen} class="app-sidebar" id="workspace-navigation" inert={mobile && !menuOpen}>
+			<a class="brand brand-desktop" href={`${base}/`} aria-label="OpenSlot overview"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>OpenSlot<span class="brand-dot">.</span></a>
+			<div class="workspace-label">YOUR WORKSPACE</div>
+			<nav class="app-nav" aria-label="Main navigation">
+				{@render navGroup(navigation)}
+				<div class="nav-label">CONNECT & SHARE</div>
+				{@render navGroup(connections)}
+				<div class="nav-divider"></div>
+				<a href={`${base}/settings`} class:current={active('/settings')} onclick={() => menuOpen = false}><Settings size={18} strokeWidth={1.7}/><span>Settings</span></a>
+				<Button variant="ghost" class="more-toggle" aria-expanded={moreOpen} onclick={() => moreOpen = !moreOpen}>More tools <span aria-hidden="true">{moreOpen ? '−' : '+'}</span></Button>
+				{#if moreOpen}
+					{#if $currentUser?.is_admin}<a href={`${base}/members`} onclick={() => menuOpen = false}><Users size={18}/><span>Members</span></a><a href={`${base}/teams`} onclick={() => menuOpen = false}><Users size={18}/><span>Teams</span></a>{/if}
+					<a href={`${base}/webhooks`} onclick={() => menuOpen = false}><Webhook size={18}/><span>Webhooks</span></a>
+					<a href={`${base}/connections`} onclick={() => menuOpen = false}><Plug size={18}/><span>Connected apps</span></a>
+					{#if $currentUser?.is_admin && recordingsConfigured}<a href={`${base}/recordings`} onclick={() => menuOpen = false}><Video size={18}/><span>Recordings</span></a>{/if}
 				{/if}
+			</nav>
+			<div class="sidebar-note"><span class="status-dot"></span>Free & open source<p>Your calendar. Your tools. Your rules.</p></div>
+			<div class="sidebar-account">
+				<a href={`${base}/settings/profile`} class="account-link"><span class="account-avatar">{($currentUser?.name ?? 'U').slice(0, 1).toUpperCase()}</span><span><strong>{$currentUser?.name}</strong><small>{$currentUser?.timezone}</small></span></a>
+				<Button variant="ghost" size="icon" aria-label={dark ? 'Use light theme' : 'Use dark theme'} onclick={() => setTheme(!dark)}>{#if dark}<Sun size={17}/>{:else}<Moon size={17}/>{/if}</Button>
+				<Button variant="ghost" size="icon" aria-label="Sign out" onclick={logout}><LogOut size={17}/></Button>
 			</div>
 		</aside>
-
-		<!-- Main content -->
-		<main class="flex-1 overflow-y-auto bg-background">
-			<div class="mx-auto max-w-4xl px-8 py-8">
-				{@render children()}
-			</div>
-		</main>
+		<main class="app-main" id="main-content" inert={mobile && menuOpen}><div class="page-container">{@render children()}</div></main>
 	</div>
-	</div>
-
-	<Dialog.Root bind:open={reportOpen}>
-		<Dialog.Content class="max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Report an issue</Dialog.Title>
-				<Dialog.Description>
-					Please <strong>search the existing issues first</strong> — it may already be reported or being
-					worked on. The tracker is for <strong>reproducible bugs</strong> in Calnode; for setup help or
-					“how do I…” questions, please use Discussions instead.
-				</Dialog.Description>
-			</Dialog.Header>
-			<Dialog.Footer class="gap-2 sm:justify-between">
-				<a
-					href={ISSUES_URL}
-					target="_blank"
-					rel="noopener noreferrer"
-					onclick={() => (reportOpen = false)}
-					class={buttonVariants({ variant: 'outline' })}
-				>
-					Search existing issues
-				</a>
-				<a
-					href={NEW_ISSUE_URL}
-					target="_blank"
-					rel="noopener noreferrer"
-					onclick={() => (reportOpen = false)}
-					class={buttonVariants()}
-				>
-					Report a bug
-				</a>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
 {/if}

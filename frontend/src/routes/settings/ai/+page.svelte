@@ -41,7 +41,7 @@
 			enabled = settings.enabled;
 			extraInstructions = settings.extra_instructions;
 			apiKey = '';
-			toast.success(settings.active ? 'Saved — AI is on' : 'Saved');
+			toast.success(settings.active ? 'Saved · AI is on' : 'Saved');
 		}, 'Could not save AI settings');
 	}
 
@@ -75,7 +75,7 @@
 					<h2 class="text-sm font-semibold">AI assistant</h2>
 					<p class="mt-0.5 text-xs text-muted-foreground">
 						Powers conversational booking on your booking pages. Bring your own
-						model — any OpenAI-compatible endpoint (a hosted model, or one you run
+						model · any OpenAI-compatible endpoint (a hosted model, or one you run
 						yourself). Off by default; if it's unavailable, bookers just use the calendar.
 					</p>
 				</div>
@@ -103,7 +103,7 @@
 						placeholder={settings?.api_key_set ? '•••••••• (stored)' : 'Enter API key (optional for local endpoints)'}
 						bind:value={apiKey} />
 					{#if settings?.api_key_set && !apiKey}
-						<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+						<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 					{/if}
 				</div>
 
@@ -127,17 +127,17 @@
 		<div class="rounded-lg border bg-card p-6">
 			<h2 class="text-sm font-semibold">Assistant instructions</h2>
 			<p class="mt-0.5 text-xs text-muted-foreground">
-				Extra guidance — tone, business context, do's and don'ts. Appended to the built-in
+				Extra guidance · tone, business context, do's and don'ts. Appended to the built-in
 				instructions (which handle the booking flow + safety and can't be edited).
 			</p>
 			<div class="mt-3 space-y-1.5">
 				<Label for="ai-extra">Additional instructions</Label>
 				<Textarea id="ai-extra" rows={4} bind:value={extraInstructions}
-					placeholder="e.g. Keep a warm, professional tone. We're a law firm — mention that consultations are confidential." />
+					placeholder="e.g. Keep a warm, professional tone. We're a law firm · mention that consultations are confidential." />
 				<p class="text-xs text-muted-foreground">
 					The assistant replies in each visitor's own language automatically. Writing these
 					instructions in a different language than your visitors works, but is somewhat less
-					reliable — for best results, write them in whichever language most of your visitors use.
+					reliable · for best results, write them in whichever language most of your visitors use.
 				</p>
 			</div>
 			{#if settings?.base_prompt}
@@ -153,7 +153,7 @@
 
 		<p class="text-xs text-muted-foreground">
 			Privacy: the assistant only ever receives computed availability windows and public
-			event details — never your calendar event titles, attendees, or other private data.
+			event details · never your calendar event titles, attendees, or other private data.
 			For strict data-residency needs, point the endpoint at inference you control.
 		</p>
 	</div>

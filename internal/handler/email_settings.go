@@ -169,7 +169,7 @@ func (h *Handler) GetEmailSettings(w http.ResponseWriter, r *http.Request) {
 		"resend_api_key_set": resendEnc != "",
 		"transport":          string(transport),
 		"enabled":            h.isEmailEnabled(),
-		// RSVP tracking for Calnode-sent invites (Resend inbound). Active only with all
+		// RSVP tracking for OpenSlot-sent invites (Resend inbound). Active only with all
 		// three of the address, the webhook secret and a Resend API key.
 		"rsvp_address":              rsvpAddr,
 		"resend_webhook_secret_set": webhookSecretEnc != "",
@@ -280,7 +280,7 @@ func (h *Handler) PatchEmailSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.EmailFromName == "" {
-		req.EmailFromName = "Calnode"
+		req.EmailFromName = "OpenSlot"
 	}
 	if req.RSVPAddress != nil {
 		*req.RSVPAddress = strings.TrimSpace(*req.RSVPAddress)
@@ -470,8 +470,8 @@ func (h *Handler) TestEmailConnection(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.mailer.Send(ctx, mailer.Message{
 		To:      []string{user.Email},
-		Subject: "[TEST] Calnode email configuration",
-		Text:    "This is a test email from Calnode. If you received this, your email settings are working correctly.",
+		Subject: "[TEST] OpenSlot email configuration",
+		Text:    "This is a test email from OpenSlot. If you received this, your email settings are working correctly.",
 	}); err != nil {
 		h.logger.ErrorContext(r.Context(), "email connection test: send",
 			"transport", string(transport), "error", err)

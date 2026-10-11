@@ -24,7 +24,7 @@
 		{ value: 'zoom',         label: 'Zoom' },
 		{ value: 'teams',        label: 'Microsoft Teams' },
 		{ value: 'google_meet',  label: 'Google Meet' },
-		{ value: 'livekit',      label: 'Calnode Video (LiveKit)' },
+		{ value: 'livekit',      label: 'OpenSlot Video (LiveKit)' },
 		{ value: 'phone',        label: 'Phone call' },
 		{ value: 'link',         label: 'Video link' },
 		{ value: 'in_person',    label: 'In person' },
@@ -34,7 +34,7 @@
 		link: 'Meeting URL', zoom: 'Zoom link', google_meet: 'Meet link',
 		teams: 'Teams link', phone: 'Phone number', in_person: 'Address', custom_video: 'Meeting URL',
 	};
-	// Placeholder hint per type — in-person is the only optional value.
+	// Placeholder hint per type · in-person is the only optional value.
 	const LOCATION_PLACEHOLDER: Record<string, string> = {
 		zoom: 'https://…zoom.us/j/… (required)', link: 'https://… (required)',
 		phone: '+1 555 123 4567 (required)', in_person: 'Address (optional)',
@@ -42,7 +42,7 @@
 
 	const INVITE_DELIVERY = [
 		{ value: 'calendar', label: "The host's calendar" },
-		{ value: 'calnode',  label: 'Calnode, from your workspace' },
+		{ value: 'calnode',  label: 'OpenSlot, from your workspace' },
 	];
 
 	// ── Event type ───────────────────────────────────────────────────────────────
@@ -59,9 +59,9 @@
 	let etError = $state('');
 	let etSaving = $state(false);
 
-	// Connected calendar (the owner's) — drives the meeting-link auto-generation hint.
+	// Connected calendar (the owner's) · drives the meeting-link auto-generation hint.
 	let calStatus = $state<CalendarStatus | null>(null);
-	// Owner's Zoom connection — drives the Zoom auto-mint hint.
+	// Owner's Zoom connection · drives the Zoom auto-mint hint.
 	let zoomStatus = $state<ZoomStatus | null>(null);
 	// Which connected provider can natively mint each online platform's link.
 	const PLATFORM_PROVIDER: Record<string, string> = { google_meet: 'google', teams: 'microsoft' };
@@ -92,13 +92,13 @@
 	const zoomAutoGen = $derived(form.location_type === 'zoom' && !!zoomStatus?.connected);
 
 	// ── Routing ──────────────────────────────────────────────────────────────────
-	// The editor asks two plain questions — "who can host?" and (for a team)
-	// "do they rotate or all attend?" — and derives routing_mode + host roles from
+	// The editor asks two plain questions · "who can host?" and (for a team)
+	// "do they rotate or all attend?" · and derives routing_mode + host roles from
 	// the answers. The engine and DB are unchanged; this is purely how roles are
 	// authored.
 	const RR_STRATEGIES = [
-		{ value: 'even',     label: 'Even — fewest upcoming bookings' },
-		{ value: 'priority', label: 'Priority — top of the list first' },
+		{ value: 'even',     label: 'Even · fewest upcoming bookings' },
+		{ value: 'priority', label: 'Priority · top of the list first' },
 		{ value: 'soonest',  label: 'Soonest availability' },
 	];
 	type Strategy = 'even' | 'priority' | 'soonest';
@@ -134,7 +134,7 @@
 	let members = $state<TeamMember[]>([]);
 	let teams = $state<Team[]>([]);
 
-	// routing_mode is derived from the two answers — never set directly.
+	// routing_mode is derived from the two answers · never set directly.
 	const routingMode = $derived(
 		hostScope === 'me' ? 'fixed' : staffing === 'rotate' ? 'round_robin' : 'collective'
 	);
@@ -185,13 +185,13 @@
 
 	// Members already chosen in the *active* staffing list, so the pickers don't
 	// re-offer them. Scoped to the visible list (rotation vs together): otherwise
-	// hosts loaded for the other mode — e.g. a collective event's members still in
-	// togetherHosts after switching to Rotate — would wrongly mark everyone
+	// hosts loaded for the other mode · e.g. a collective event's members still in
+	// togetherHosts after switching to Rotate · would wrongly mark everyone
 	// unavailable and make addOne skip every team member.
 	const assignedIds = $derived(
 		new Set((staffing === 'rotate' ? rotationHosts : togetherHosts).map((h) => h.user_id))
 	);
-	// Any active member not already chosen — including the current user, who can
+	// Any active member not already chosen · including the current user, who can
 	// be a host like anyone else.
 	const availableMembers = $derived(
 		members.filter((m) => !m.archived && !assignedIds.has(m.id))
@@ -199,7 +199,7 @@
 
 	type Target = 'rotation' | 'together';
 	function addOne(target: Target, h: Host) {
-		// Dedup against this target's own list, not the union — a person can sit in
+		// Dedup against this target's own list, not the union · a person can sit in
 		// only one staffing list, and the other list may hold stale members from a
 		// previous mode.
 		const list: { user_id: string }[] = target === 'rotation' ? rotationHosts : togetherHosts;
@@ -256,7 +256,7 @@
 	let msg_cancellation = $state('');
 	let msg_reschedule = $state('');
 	let msg_reminder = $state('');
-	// Assistant's opening chat line for this event type — blank keeps the built-in
+	// Assistant's opening chat line for this event type · blank keeps the built-in
 	// (translated) default; set overrides it verbatim, same as the email notes above.
 	let msg_greeting = $state('');
 	// Optional custom subject lines (empty = built-in default subject).
@@ -367,7 +367,7 @@
 				// Not `|| null`: this form always saves the whole page state, so a blanked
 				// field must send '' to actually clear it. The API treats null as "leave
 				// unchanged" (for partial-PATCH callers), which would silently keep the old
-				// value here — the field would look cleared in the UI but persist server-side.
+				// value here · the field would look cleared in the UI but persist server-side.
 				msg_confirmation: msg_confirmation.trim(),
 				msg_cancellation: msg_cancellation.trim(),
 				msg_reschedule: msg_reschedule.trim(),
@@ -446,21 +446,21 @@
 
 		switch (type) {
 			case 'confirmation':
-				return `Hi Alex Johnson,\n\nYour booking has been confirmed.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test\n\nTo cancel, visit:\n[booking page]${noteBlk}\n— Calnode`;
+				return `Hi Alex Johnson,\n\nYour booking has been confirmed.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test\n\nTo cancel, visit:\n[booking page]${noteBlk}\n— OpenSlot`;
 			case 'cancellation':
-				return `Hi Alex Johnson,\n\nYour booking has been cancelled.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}\n\nTo rebook, visit:\n[booking page]${noteBlk}\n— Calnode`;
+				return `Hi Alex Johnson,\n\nYour booking has been cancelled.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}\n\nTo rebook, visit:\n[booking page]${noteBlk}\n— OpenSlot`;
 			case 'reschedule':
-				return `Hi Alex Johnson,\n\nYour booking has been rescheduled.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nWas:      ${prev}\nNow:      ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test${noteBlk}\n— Calnode`;
+				return `Hi Alex Johnson,\n\nYour booking has been rescheduled.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nWas:      ${prev}\nNow:      ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test${noteBlk}\n— OpenSlot`;
 			case 'reminder':
-				return `Hi Alex Johnson,\n\nThis is a reminder that your booking is coming up.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test${noteBlk}\n— Calnode`;
+				return `Hi Alex Johnson,\n\nThis is a reminder that your booking is coming up.\n\nEvent:    ${name}\nWith:     ${et?.name ?? 'Host'}\nStart:    ${start}\nEnd:      ${end}${loc}\n\nBooking reference: preview-test${noteBlk}\n— OpenSlot`;
 		}
 	}
 
 	onMount(async () => {
 		await loadET();
-		// Editor-only data (owner-scoped endpoints) — skip for read-only hosts.
+		// Editor-only data (owner-scoped endpoints) · skip for read-only hosts.
 		if (et?.owned === false) return;
-		// Connected calendar — best-effort; drives the meeting-link hint only.
+		// Connected calendar · best-effort; drives the meeting-link hint only.
 		api.get<CalendarStatus>('/v1/calendar/status').then((s) => (calStatus = s)).catch(() => {});
 	api.get<ZoomStatus>('/v1/zoom/status').then((s) => (zoomStatus = s)).catch(() => {});
 		await loadHosts();
@@ -507,7 +507,7 @@
 	</div>
 {/snippet}
 
-<svelte:head><title>{et?.name ?? slug} — Event Type — Calnode</title></svelte:head>
+<svelte:head><title>{et?.name ?? slug} · Event Type · OpenSlot</title></svelte:head>
 <svelte:window onkeydown={saveOnCmdS(saveET, () => !etSaving)} />
 
 <div class="mb-8">
@@ -615,7 +615,7 @@
 			</div>
 			<div class="col-span-2 space-y-1.5">
 				<Label for="et-desc">Description</Label>
-				<Textarea id="et-desc" bind:value={form.description} placeholder="Optional — supports **bold** and *italic* markdown" rows={3} class="resize-y" />
+				<Textarea id="et-desc" bind:value={form.description} placeholder="Optional · supports **bold** and *italic* markdown" rows={3} class="resize-y" />
 			</div>
 			<div class="space-y-1.5">
 				<p class="text-sm font-medium">Status</p>
@@ -676,7 +676,7 @@
 						<Label for="et-loc-val">{platform} link</Label>
 						{#if meetAutoGen}
 							<p class="rounded-md border border-green-600/20 bg-green-50 px-3 py-2 text-sm text-green-700">
-								A {platform} link is generated automatically for each booking from your connected calendar.{#if form.location_type === 'teams'} Personal Microsoft accounts can't generate Teams links — add one below as a fallback.{/if}
+								A {platform} link is generated automatically for each booking from your connected calendar.{#if form.location_type === 'teams'} Personal Microsoft accounts can't generate Teams links · add one below as a fallback.{/if}
 							</p>
 						{:else}
 							<p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -705,7 +705,7 @@
 					{:else if form.location_type === 'livekit'}
 						<Label>Video room</Label>
 						<p class="rounded-md border border-green-600/20 bg-green-50 px-3 py-2 text-sm text-green-700">
-							A secure video room is created automatically for each booking — no link needed. Guests join in the browser. (Set up the server in Settings → Video.)
+							A secure video room is created automatically for each booking · no link needed. Guests join in the browser. (Set up the server in Settings → Video.)
 						</p>
 					{:else}
 						<Label for="et-loc-val">{LOCATION_NEEDS_VALUE[form.location_type] ?? 'Details'}</Label>
@@ -739,7 +739,7 @@
 						own address. Hosts still see the meeting on their own calendar, with the meeting link.
 					{:else}
 						The host's connected calendar invites the booker, so the invite shows the host's own
-						email address. Choose Calnode to keep hosts' addresses private or to book as a team.
+						email address. Choose OpenSlot to keep hosts' addresses private or to book as a team.
 					{/if}
 				</p>
 			</div>
@@ -766,7 +766,7 @@
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
 				Leave at 0 for a free event. A price sends bookers to Stripe Checkout before the slot is
-				confirmed — requires <a href="/admin/settings/payments" class="underline">Stripe</a> to be connected.
+				confirmed · requires <a href="/admin/settings/payments" class="underline">Stripe</a> to be connected.
 			</p>
 		</div>
 
@@ -813,7 +813,7 @@
 		<div>
 			<p class="-mt-1 mb-4 text-sm text-muted-foreground">Who can host this event, and how meetings are staffed.</p>
 
-			<!-- Q1 — who can host -->
+			<!-- Q1 · who can host -->
 			<div class="space-y-1.5">
 				<Label>Who can host this event?</Label>
 				<div class="inline-flex rounded-lg border bg-muted/40 p-0.5">
@@ -830,13 +830,13 @@
 					{#if hostScope === 'me'}
 						Every booking goes to you.
 					{:else}
-						Pick who can take these bookings — add members individually or pull in a whole team.
+						Pick who can take these bookings · add members individually or pull in a whole team.
 					{/if}
 				</p>
 			</div>
 
 			{#if hostScope === 'people'}
-				<!-- Q2 — how the meeting is staffed -->
+				<!-- Q2 · how the meeting is staffed -->
 				<div class="mt-4 space-y-1.5">
 					<Label>How should the meeting be staffed?</Label>
 					<div class="inline-flex rounded-lg border bg-muted/40 p-0.5">
@@ -878,7 +878,7 @@
 								{:else if rrStrategy === 'soonest'}
 									Offers the earliest slot anyone in the group has free.
 								{:else}
-									Spreads bookings evenly — whoever has the fewest upcoming meetings is booked.
+									Spreads bookings evenly · whoever has the fewest upcoming meetings is booked.
 								{/if}
 							</p>
 						</div>
@@ -948,7 +948,7 @@
 						{/if}
 						<p class="text-xs text-muted-foreground">
 							<span class="font-medium text-foreground">Required</span> hosts always attend and must be free for a slot to open.
-							<span class="font-medium text-foreground">Optional</span> hosts join only when they're free — they never block a slot.
+							<span class="font-medium text-foreground">Optional</span> hosts join only when they're free · they never block a slot.
 						</p>
 						{@render hostPickers('together', 'grp')}
 					</div>
@@ -1048,7 +1048,7 @@
 								: msg_reminder}
 							<div class="border-t px-4 pb-4 pt-3 space-y-3">
 								<div class="space-y-1.5">
-									<Label class="text-xs text-muted-foreground">Subject line <span class="font-normal">(optional — blank uses the default)</span></Label>
+									<Label class="text-xs text-muted-foreground">Subject line <span class="font-normal">(optional · blank uses the default)</span></Label>
 									{#if item.key === 'confirmation'}
 										<Input bind:value={subj_confirmation} placeholder={`Booking confirmed: ${form.name}`} />
 									{:else if item.key === 'cancellation'}
@@ -1096,8 +1096,8 @@
 									{/if}
 									{#if testError[item.key]}
 										<span class="text-xs text-destructive">
-											{#if testError[item.key] === 'Email is not configured on this server — add SMTP settings to enable sending'}
-												SMTP is not configured — <a href="{base}/settings/email" class="underline">configure it in Settings</a>.
+											{#if testError[item.key] === 'Email is not configured on this server · add SMTP settings to enable sending'}
+												SMTP is not configured · <a href="{base}/settings/email" class="underline">configure it in Settings</a>.
 											{:else}
 												{testError[item.key]}
 											{/if}

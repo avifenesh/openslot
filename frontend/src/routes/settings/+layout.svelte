@@ -16,14 +16,13 @@
 		{ section: 'Workspace', href: `${base}/settings/video`, label: 'Video', adminOnly: true },
 		{ section: 'Workspace', href: `${base}/settings/storage`, label: 'Storage', adminOnly: true },
 		{ section: 'Workspace', href: `${base}/settings/payments`, label: 'Payments', adminOnly: true },
-		{ section: 'Workspace', href: `${base}/settings/ai`, label: 'AI', adminOnly: true },
 		{ section: 'Workspace', href: `${base}/settings/tracking`, label: 'Tracking', adminOnly: true },
 	];
 
 	const visibleNavItems = $derived(navItems.filter((item) => !item.adminOnly || $currentUser?.is_admin));
 </script>
 
-<svelte:head><title>Settings — Calnode</title></svelte:head>
+<svelte:head><title>Settings · OpenSlot</title></svelte:head>
 
 <div class="mb-8">
 	<h1 class="text-2xl font-semibold tracking-tight">Settings</h1>

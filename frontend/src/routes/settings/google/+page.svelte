@@ -45,7 +45,7 @@
 			if (clientSecret) body.client_secret = clientSecret;
 			googleSettings = await api.patch<GoogleSettings>('/v1/settings/google', body);
 			clientSecret = '';
-			toast.success('Saved — go to Calendar to connect your account');
+			toast.success('Saved · go to Calendar to connect your account');
 		}, 'Could not save Google settings');
 	}
 </script>
@@ -63,7 +63,7 @@
 
 		{#if originMismatch}
 			<div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-				<p class="font-medium">This page is being viewed at a different domain than Calnode is configured for</p>
+				<p class="font-medium">This page is being viewed at a different domain than OpenSlot is configured for</p>
 				<p class="mt-1 text-amber-800">
 					You're browsing <code class="rounded bg-amber-100 px-1 font-mono">{browserOrigin}</code>, but this
 					server's <code class="rounded bg-amber-100 px-1 font-mono">BASE_URL</code> is set to
@@ -85,7 +85,7 @@
 					<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">1</span>
 					<div>
 						Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary underline">console.cloud.google.com</a>.
-						If you don't have a project, create one — any name works.
+						If you don't have a project, create one · any name works.
 					</div>
 				</li>
 				<li class="flex gap-3">
@@ -123,7 +123,7 @@
 						Click <span class="font-medium">Create</span>. Copy the Client ID and Client Secret shown.
 						{#if !isLocal}
 							<p class="mt-1.5 text-xs text-muted-foreground">
-								If you also run Calnode locally, add the
+								If you also run OpenSlot locally, add the
 								<code class="rounded bg-muted px-1">http://localhost:3000/…</code> variants of both URIs too.
 							</p>
 						{/if}
@@ -162,7 +162,7 @@
 						placeholder={googleSettings?.client_secret_set ? '•••••••• (stored)' : 'Enter client secret'}
 						bind:value={clientSecret} />
 					{#if googleSettings?.client_secret_set && !clientSecret}
-						<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+						<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 					{/if}
 				</div>
 			</div>
@@ -177,7 +177,7 @@
 					<code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/auth/callback</code>
 					{#if !isLocal}
 						<p class="mt-1.5 text-xs text-muted-foreground">
-							If you also run Calnode locally, add the
+							If you also run OpenSlot locally, add the
 							<code class="rounded bg-muted px-1">http://localhost:3000/…</code> variants too.
 						</p>
 					{/if}

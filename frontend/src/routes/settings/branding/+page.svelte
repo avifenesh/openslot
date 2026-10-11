@@ -45,7 +45,7 @@
 	let fileInput = $state<HTMLInputElement | undefined>();
 	let bannerFileInput = $state<HTMLInputElement | undefined>();
 
-	// Crop dialog — Cropper is lazy-loaded client-side only to avoid SSR failures.
+	// Crop dialog · Cropper is lazy-loaded client-side only to avoid SSR failures.
 	let cropOpen = $state(false);
 	let cropSrc = $state('');
 	let cropTarget = $state<CropTarget>('logo');
@@ -56,7 +56,7 @@
 	$effect(() => {
 		if (!cropperEl || !CropperClass) return;
 		// Free-form crop (aspectRatio NaN) with the whole image selected by default,
-		// so cropping is optional — the user can adjust or just Save the full image.
+		// so cropping is optional · the user can adjust or just Save the full image.
 		const c = new CropperClass(cropperEl, {
 			aspectRatio: NaN,
 			viewMode: 1,
@@ -198,7 +198,7 @@
 			<div class="mt-4 space-y-1.5">
 				<Label for="business-name">Business name</Label>
 				<Input id="business-name" bind:value={businessName} placeholder="Orchestratr" maxlength={200} />
-				<p class="text-xs text-muted-foreground">Used where there's no logo. Falls back to “Calnode” if left blank.</p>
+				<p class="text-xs text-muted-foreground">Used where there's no logo. Falls back to “OpenSlot” if left blank.</p>
 			</div>
 
 			<div class="mt-5 space-y-3">
@@ -239,7 +239,7 @@
 
 				<p class="text-xs text-muted-foreground">
 					Click the box to upload. Shown at up to 600×160, so anything wider than it is tall works
-					best. PNG with a transparent background looks best on a light background. Any shape — you
+					best. PNG with a transparent background looks best on a light background. Any shape · you
 					can crop it next. JPEG, PNG, GIF or WebP, max 5 MB; it is re-encoded as a PNG. Adjust size
 					and opacity (preview updates live), then Save.
 				</p>
@@ -277,7 +277,7 @@
 				{/if}
 
 				<p class="text-xs text-muted-foreground">
-					Shown full-width below your logo on booking emails and your public booking/manage pages — hidden
+					Shown full-width below your logo on booking emails and your public booking/manage pages · hidden
 					entirely if not set. Displayed at up to 1600×800, so wide images work best. JPEG, PNG, GIF or
 					WebP, max 5 MB; it is re-encoded as a PNG.
 				</p>
@@ -289,7 +289,7 @@
 			<p class="mt-0.5 text-xs text-muted-foreground">
 				Links to your own privacy policy and terms. They appear in your public booking page footer, and
 				your privacy policy is linked from the cookie-consent banner. You're the data controller for
-				bookings made through your Calnode — these just point visitors to your policies.
+				bookings made through your OpenSlot · these just point visitors to your policies.
 			</p>
 
 			<div class="mt-4 space-y-1.5">
@@ -308,7 +308,7 @@
 			<div class="rounded-lg border bg-card p-6">
 				<h2 class="text-sm font-semibold">Language</h2>
 				<p class="mt-0.5 text-xs text-muted-foreground">
-					Your public booking pages and emails are translated per visitor — most see their
+					Your public booking pages and emails are translated per visitor · most see their
 					browser's language automatically. This sets what a visitor sees when their browser
 					asks for a language you don't support (e.g. an operator serving mostly Spanish-speaking
 					customers might prefer Spanish here instead of English).
