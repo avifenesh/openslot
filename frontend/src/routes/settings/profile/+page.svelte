@@ -30,7 +30,7 @@
 	let week_start = $state(1);
 	let date_format = $state<'dmy' | 'mdy' | 'ymd'>('dmy');
 
-	// Crop dialog state — Cropper is lazy-loaded client-side only to avoid SSR failures
+	// Crop dialog state · Cropper is lazy-loaded client-side only to avoid SSR failures
 	let cropOpen = $state(false);
 	let cropSrc = $state('');
 	let cropperEl = $state<HTMLImageElement | undefined>(undefined);

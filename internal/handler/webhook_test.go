@@ -11,13 +11,15 @@ import (
 
 // ---------------------------------------------------------------------------
 // CreateWebhook
+// These contract tests use documentation-only IPs so URL checks do not depend
+// on public DNS. They store URLs but never deliver requests to these addresses.
 // ---------------------------------------------------------------------------
 
 func TestCreateWebhook_success(t *testing.T) {
 	h, apiKey, _ := setupWorkspace(t)
 
 	req := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":["booking.created"]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":["booking.created"]}`, apiKey)
 	rec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(rec, req)
 
@@ -36,8 +38,8 @@ func TestCreateWebhook_success(t *testing.T) {
 	if len(secret) != 64 {
 		t.Errorf("secret length = %d; want 64 hex chars", len(secret))
 	}
-	if resp["url"] != "https://example.com/hook" {
-		t.Errorf("url = %v; want https://example.com/hook", resp["url"])
+	if resp["url"] != "https://192.0.2.10/hook" {
+		t.Errorf("url = %v; want https://192.0.2.10/hook", resp["url"])
 	}
 }
 
@@ -45,7 +47,7 @@ func TestCreateWebhook_bothEvents(t *testing.T) {
 	h, apiKey, _ := setupWorkspace(t)
 
 	req := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":["booking.created","booking.cancelled"]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":["booking.created","booking.cancelled"]}`, apiKey)
 	rec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(rec, req)
 
@@ -84,7 +86,7 @@ func TestCreateWebhook_emptyEvents_returns400(t *testing.T) {
 	h, apiKey, _ := setupWorkspace(t)
 
 	req := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":[]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":[]}`, apiKey)
 	rec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(rec, req)
 
@@ -97,7 +99,7 @@ func TestCreateWebhook_unknownEvent_returns400(t *testing.T) {
 	h, apiKey, _ := setupWorkspace(t)
 
 	req := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":["booking.unknown"]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":["booking.unknown"]}`, apiKey)
 	rec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(rec, req)
 
@@ -110,7 +112,7 @@ func TestCreateWebhook_requiresAuth(t *testing.T) {
 	h, _, _ := setupWorkspace(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/webhooks",
-		strings.NewReader(`{"url":"https://example.com/hook","events":["booking.created"]}`))
+		strings.NewReader(`{"url":"https://192.0.2.10/hook","events":["booking.created"]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(rec, req)
@@ -146,8 +148,8 @@ func TestListWebhooks_emptyInitially(t *testing.T) {
 func TestListWebhooks_returnsCreated(t *testing.T) {
 	h, apiKey, _ := setupWorkspace(t)
 
-	// Create two webhooks. Use IANA-reserved domains that resolve to public IPs.
-	for _, domain := range []string{"example.com", "example.net"} {
+	// Create two webhooks. Use documentation IPs so this CRUD test needs no DNS.
+	for _, domain := range []string{"192.0.2.10", "192.0.2.11"} {
 		r := authReq(http.MethodPost, "/v1/webhooks",
 			fmt.Sprintf(`{"url":"https://%s/hook","events":["booking.created"]}`, domain),
 			apiKey)
@@ -205,7 +207,7 @@ func TestDeleteWebhook_success(t *testing.T) {
 
 	// Create.
 	createReq := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":["booking.created"]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":["booking.created"]}`, apiKey)
 	createRec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(createRec, createReq)
 	created := mustCreated(t, createRec, "create webhook")
@@ -256,7 +258,7 @@ func TestListWebhookDeliveries_emptyInitially(t *testing.T) {
 
 	// Create a webhook.
 	createReq := authReq(http.MethodPost, "/v1/webhooks",
-		`{"url":"https://example.com/hook","events":["booking.created"]}`, apiKey)
+		`{"url":"https://192.0.2.10/hook","events":["booking.created"]}`, apiKey)
 	createRec := httptest.NewRecorder()
 	h.RequireAuth(h.CreateWebhook)(createRec, createReq)
 	created := mustCreated(t, createRec, "create webhook")

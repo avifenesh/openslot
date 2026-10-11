@@ -34,7 +34,7 @@
 			settings = await api.patch<StripeSettings>('/v1/settings/stripe', body);
 			secretKey = '';
 			webhookSecret = '';
-			toast.success('Saved — set a price on an event type to start charging');
+			toast.success('Saved · set a price on an event type to start charging');
 		}, 'Could not save payment settings');
 	}
 
@@ -113,7 +113,7 @@
 						placeholder={settings?.secret_key_set ? '•••••••• (stored)' : 'sk_live_… or sk_test_…'}
 						bind:value={secretKey} />
 					{#if settings?.secret_key_set && !secretKey}
-						<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+						<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 					{/if}
 				</div>
 				<div class="space-y-1.5">
@@ -126,7 +126,7 @@
 						placeholder={settings?.webhook_secret_set ? '•••••••• (stored)' : 'whsec_…'}
 						bind:value={webhookSecret} />
 					{#if settings?.webhook_secret_set && !webhookSecret}
-						<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+						<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 					{/if}
 				</div>
 			</div>

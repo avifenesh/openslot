@@ -26,10 +26,11 @@ export function prefsFromUser(u: User): UserPrefs {
 	};
 }
 
-function fmtDatePart(date: Date, format: 'dmy' | 'mdy' | 'ymd'): string {
-	const d = String(date.getDate()).padStart(2, '0');
-	const m = String(date.getMonth() + 1).padStart(2, '0');
-	const y = date.getFullYear();
+function fmtDatePart(date: Date, format: 'dmy' | 'mdy' | 'ymd', timeZone: string): string {
+	const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+		timeZone, day: '2-digit', month: '2-digit', year: 'numeric'
+	}).formatToParts(date).map(part => [part.type, part.value]));
+	const { day: d, month: m, year: y } = parts;
 	if (format === 'mdy') return `${m}/${d}/${y}`;
 	if (format === 'ymd') return `${y}-${m}-${d}`;
 	return `${d}/${m}/${y}`;
@@ -37,8 +38,9 @@ function fmtDatePart(date: Date, format: 'dmy' | 'mdy' | 'ymd'): string {
 
 export function fmtDateTime(iso: string, p: UserPrefs = get(prefs)): string {
 	const date = new Date(iso);
-	const datePart = fmtDatePart(date, p.date_format);
+	const datePart = fmtDatePart(date, p.date_format, p.timezone);
 	const timePart = date.toLocaleTimeString(undefined, {
+		timeZone: p.timezone,
 		hour: '2-digit',
 		minute: '2-digit',
 		hour12: p.time_format === '12h'
@@ -56,6 +58,7 @@ export function fmtDate(ymd: string, p: UserPrefs = get(prefs)): string {
 
 export function fmtTime(iso: string, p: UserPrefs = get(prefs)): string {
 	return new Date(iso).toLocaleTimeString(undefined, {
+		timeZone: p.timezone,
 		hour: '2-digit',
 		minute: '2-digit',
 		hour12: p.time_format === '12h'
@@ -71,6 +74,7 @@ export const TIMEZONES = [
 	'Asia/Tokyo',
 	'Asia/Singapore',
 	'Asia/Dubai',
+	'Asia/Jerusalem',
 	'Europe/London',
 	'Europe/Paris',
 	'Europe/Berlin',

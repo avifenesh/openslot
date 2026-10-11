@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -51,7 +52,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	bi := buildinfo.Get()
-	logger.Info("starting calnode", "version", bi.Version, "commit", bi.Commit, "build_time", bi.BuildTime, "dirty", bi.Dirty)
+	logger.Info("starting openslot", "version", bi.Version, "commit", bi.Commit, "build_time", bi.BuildTime, "dirty", bi.Dirty)
 
 	// Config whose wrong value is worse than its absence is checked here rather than
 	// tolerated at request time — see (*config.Config).Validate.
@@ -97,7 +98,7 @@ func main() {
 	srv, drainWorker := server.New(workerCtx, cfg, database, logger)
 
 	httpServer := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         net.JoinHostPort(cfg.BindHost, cfg.Port),
 		Handler:      srv,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

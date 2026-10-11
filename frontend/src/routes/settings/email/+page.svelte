@@ -22,12 +22,12 @@
 	let smtpTLS = $state(false);
 	let smtpStartTLS = $state(true);
 	let emailFrom = $state('');
-	let emailFromName = $state('Calnode');
+	let emailFromName = $state('OpenSlot');
 	let resendApiKey = $state('');
 	// Distinct from "the field is blank": blank means keep the stored key, this means
 	// deliberately remove it and go back to SMTP.
 	let clearResendKey = $state(false);
-	// RSVP tracking (Resend inbound) for invites Calnode sends itself.
+	// RSVP tracking (Resend inbound) for invites OpenSlot sends itself.
 	let rsvpAddress = $state('');
 	let webhookSecret = $state('');
 	let clearWebhookSecret = $state(false);
@@ -60,7 +60,7 @@
 		smtpTLS = email.smtp_tls;
 		smtpStartTLS = email.smtp_starttls;
 		emailFrom = email.email_from;
-		emailFromName = email.email_from_name || 'Calnode';
+		emailFromName = email.email_from_name || 'OpenSlot';
 		rsvpAddress = email.rsvp_address ?? '';
 	}, 'Could not load email settings'));
 
@@ -147,7 +147,7 @@
 			<div class="mb-4 flex items-start justify-between gap-2">
 				<div>
 					<h2 class="text-sm font-semibold">Email</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">How Calnode sends booking emails.</p>
+					<p class="mt-0.5 text-xs text-muted-foreground">How OpenSlot sends booking emails.</p>
 				</div>
 				{#if emailSettings !== null}
 					<span class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium {emailSettings.enabled ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}">
@@ -177,7 +177,7 @@
 						disabled={clearResendKey} />
 					{#if emailSettings?.resend_api_key_set && !resendApiKey && !clearResendKey}
 						<div class="flex items-center justify-between gap-2">
-							<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+							<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 							<Button variant="ghost" size="sm" class="h-6 px-2 text-xs"
 								onclick={() => (clearResendKey = true)}>Remove key</Button>
 						</div>
@@ -223,7 +223,7 @@
 							placeholder={emailSettings?.smtp_pass_set ? '•••••••• (stored)' : 'Enter password'}
 							bind:value={smtpPass} />
 						{#if emailSettings?.smtp_pass_set && !smtpPass}
-							<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+							<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 						{/if}
 					</div>
 				</div>
@@ -235,7 +235,7 @@
 					</div>
 					<div class="space-y-1.5">
 						<Label for="email-from-name">From name</Label>
-						<Input id="email-from-name" type="text" placeholder="Calnode" bind:value={emailFromName} />
+						<Input id="email-from-name" type="text" placeholder="OpenSlot" bind:value={emailFromName} />
 					</div>
 				</div>
 
@@ -274,7 +274,7 @@
 				<div>
 					<h2 class="text-sm font-semibold">RSVP tracking</h2>
 					<p class="mt-0.5 text-xs text-muted-foreground">
-						For event types whose invites Calnode sends. Bookers' Yes / No / Maybe comes back
+						For event types whose invites OpenSlot sends. Bookers' Yes / No / Maybe comes back
 						through Resend and shows on the booking.
 					</p>
 				</div>
@@ -287,7 +287,7 @@
 			</div>
 
 			<p class="mb-4 rounded-md px-3 py-2 text-xs {emailSettings?.resend_api_key_set ? 'bg-muted text-muted-foreground' : 'border border-amber-200 bg-amber-50 text-amber-800'}">
-				Needs a <strong>Full access</strong> Resend API key above: Calnode uses it to set up the
+				Needs a <strong>Full access</strong> Resend API key above: OpenSlot uses it to set up the
 				webhook and to read replies. A sending-only key can't do either.
 			</p>
 
@@ -325,7 +325,7 @@
 							</div>
 						{:else}
 							<p class="text-xs text-muted-foreground">
-								Calnode can create the webhook in your Resend account and store its signing secret.
+								OpenSlot can create the webhook in your Resend account and store its signing secret.
 							</p>
 							<div class="flex flex-wrap items-center gap-2">
 								<Button size="sm" class="h-7 text-xs" onclick={setupWebhook}

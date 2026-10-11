@@ -48,7 +48,7 @@
 	}
 </script>
 
-<svelte:head><title>Accept invite — Calnode</title></svelte:head>
+<svelte:head><title>Accept invite · OpenSlot</title></svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-muted/30 p-6">
 	<div class="w-full max-w-sm">

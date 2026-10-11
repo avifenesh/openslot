@@ -1,5 +1,5 @@
 {
-  "name": "calnode-admin",
+  "name": "openslot-admin",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,7 +17,9 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test:visual": "vitest run"
+    "test:visual": "PLAYWRIGHT_BROWSERS_PATH=.playwright vitest run",
+    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=.playwright playwright test",
+    "test:browsers": "PLAYWRIGHT_SKIP_BROWSER_GC=1 PLAYWRIGHT_BROWSERS_PATH=.playwright playwright install chromium"
   },
   "dependencies": {
     "clsx": "^2.1.1",

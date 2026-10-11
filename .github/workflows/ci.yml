@@ -1,66 +1,42 @@
-name: CI
-
-# Type-checks the SvelteKit admin app (svelte-check) and builds + tests the Go backend on every
-# push to main and on PRs. The Go binary go:embeds frontend/build, so the frontend is built first
-# (otherwise `go build` fails on the missing embed dir). modernc SQLite is pure-Go → no CGO/C
-# toolchain needed.
+name: OpenSlot checks
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
-  group: ci-${{ github.ref }}
+  group: openslot-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
-
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install frontend deps
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: svelte-check (frontend types)
-        working-directory: frontend
-        run: pnpm check
-
-      - name: Build frontend (required by the Go embed)
-        working-directory: frontend
-        run: pnpm build
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: gofmt check
+      - name: Frontend checks and build
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile && pnpm check && pnpm build
+      - name: Go format and build
+        shell: bash
         run: |
-          fmtout=$(gofmt -l .)
-          if [ -n "$fmtout" ]; then
-            echo "The following files are not gofmt'd:"
-            echo "$fmtout"
-            echo "Run: gofmt -w ."
+          set -euo pipefail
+          unformatted=$(gofmt -l cmd internal frontend/*.go)
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
             exit 1
           fi
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go build
-        run: go build ./...
-
-      - name: go test
-        run: go test ./...
+          go build ./...

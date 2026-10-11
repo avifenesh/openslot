@@ -29,7 +29,7 @@
 			if (clientSecret) body.client_secret = clientSecret;
 			settings = await api.patch<ZoomSettings>('/v1/settings/zoom', body);
 			clientSecret = '';
-			toast.success('Saved — each host can now connect Zoom from the Calendar page');
+			toast.success('Saved · each host can now connect Zoom from the Calendar page');
 		}, 'Could not save Zoom settings');
 	}
 </script>
@@ -63,7 +63,7 @@
 						unpublished, Zoom only lets users <span class="font-medium">inside the Zoom account that owns
 						the app</span> connect; hosts with their own separate Zoom accounts need a published app
 						(see DEPLOY.md, "Zoom meeting links"). If that rules Zoom out, built-in video needs no
-						Zoom app at all — see <a href="https://github.com/Calnode/calnode/blob/main/docs/VIDEO.md" target="_blank" rel="noopener noreferrer" class="font-medium text-primary underline">docs/VIDEO.md</a>.
+						Zoom app at all · see <a href="https://github.com/OpenSlot/calnode/blob/main/docs/VIDEO.md" target="_blank" rel="noopener noreferrer" class="font-medium text-primary underline">docs/VIDEO.md</a>.
 					</div>
 				</li>
 				<li class="flex gap-3">
@@ -120,7 +120,7 @@
 						placeholder={settings?.client_secret_set ? '•••••••• (stored)' : 'Enter client secret'}
 						bind:value={clientSecret} />
 					{#if settings?.client_secret_set && !clientSecret}
-						<p class="text-xs text-muted-foreground">Stored — leave blank to keep it.</p>
+						<p class="text-xs text-muted-foreground">Stored · leave blank to keep it.</p>
 					{/if}
 				</div>
 			</div>
@@ -135,9 +135,9 @@
 				</div>
 				<div class="mt-4 rounded-md bg-amber-50 px-3 py-2.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">
 					<span class="font-medium">Multi-member limit:</span> only Zoom users on the same Zoom
-					account as this app's owner can connect an unpublished app — members elsewhere are
-					refused by Zoom before Calnode is involved. Options:
-					<a href="https://github.com/Calnode/calnode/blob/main/docs/ZOOM.md" target="_blank" rel="noopener noreferrer" class="font-medium underline">docs/ZOOM.md</a>
+					account as this app's owner can connect an unpublished app · members elsewhere are
+					refused by Zoom before OpenSlot is involved. Options:
+					<a href="https://github.com/OpenSlot/calnode/blob/main/docs/ZOOM.md" target="_blank" rel="noopener noreferrer" class="font-medium underline">docs/ZOOM.md</a>
 					(built-in video needs no Zoom app at all).
 				</div>
 			{/if}

@@ -180,7 +180,7 @@
 		} catch { /* leave the dropdown empty */ }
 	}
 
-	// Refresh re-fetches in place (no full-page "Loading…" flash) — just spins the button.
+	// Refresh re-fetches in place (no full-page "Loading…" flash) · just spins the button.
 	let refreshing = $state(false);
 	async function refresh() {
 		if (refreshing) return;
@@ -285,7 +285,7 @@
 	}
 </script>
 
-<svelte:head><title>Bookings — Calnode</title></svelte:head>
+<svelte:head><title>Bookings · OpenSlot</title></svelte:head>
 
 <div class="mb-8 flex items-start justify-between gap-4">
 	<div>
@@ -567,7 +567,7 @@
 						<tr>
 							<td colspan={scope === 'all' ? 6 : 5} class="p-0">
 								<div class="border-t bg-muted/30 px-4 py-4">
-									<p class="mb-3 text-sm font-medium">Reschedule — {b.attendees?.[0]?.name ?? 'attendee'}</p>
+									<p class="mb-3 text-sm font-medium">Reschedule · {b.attendees?.[0]?.name ?? 'attendee'}</p>
 
 									<div class="flex flex-wrap items-end gap-3">
 										<div class="space-y-1.5">
@@ -609,7 +609,7 @@
 									{#if selectedSlot}
 										<div class="mt-4 flex gap-2">
 											<Button onclick={confirmReschedule} disabled={rescheduling}>
-												{rescheduling ? 'Rescheduling…' : `Confirm — ${fmtSlotTime(selectedSlot)}`}
+												{rescheduling ? 'Rescheduling…' : `Confirm · ${fmtSlotTime(selectedSlot)}`}
 											</Button>
 											<Button variant="outline" onclick={cancelReschedule}>
 												Cancel

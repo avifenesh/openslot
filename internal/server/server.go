@@ -300,7 +300,7 @@ func New(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logge
 	// an OAuth access token (the "Connect" flow) or a cno_ API key, both resolved by
 	// verifyMCPBearer. A 401 advertises the OAuth discovery doc so clients can connect.
 	mcpSrv := h.MCPServer()
-	mcpHTTP := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpSrv }, nil)
+	mcpHTTP := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpSrv }, &mcp.StreamableHTTPOptions{Stateless: true})
 	mcpAuth := auth.RequireBearerToken(h.VerifyMCPBearer, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: cfg.BaseURL + "/.well-known/oauth-protected-resource",
 	})

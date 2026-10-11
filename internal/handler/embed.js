@@ -1,4 +1,4 @@
-/* Calnode embeddable booking widget.
+/* OpenSlot embeddable booking widget, derived from Calnode (Apache-2.0).
  *
  * A dependency-free Web Component that renders the booking flow into a Shadow DOM —
  * real HTML in the host page (no iframe), styles encapsulated. It reuses the SAME
@@ -11,12 +11,12 @@
  *
  * Usage:
  *   <script src="https://booking.example.com/embed.js" async></script>
- *   <calnode-booking slug="intro-call"></calnode-booking>        <!-- inline -->
- *   <button data-calnode-popup="intro-call">Book a call</button>  <!-- popup  -->
+ *   <openslot-booking slug="intro-call"></openslot-booking>
+ *   <button data-openslot-popup="intro-call">Book a call</button>
  */
 (function () {
   'use strict';
-  if (window.customElements && customElements.get('calnode-booking')) return;
+  if (window.customElements && customElements.get('openslot-booking')) return;
 
   var SELF = document.currentScript;
   var BASE = SELF ? new URL(SELF.src).origin : window.location.origin;
@@ -416,7 +416,10 @@
           this.asstMessages.push({ role: 'assistant', content: botEl.textContent });
           if (booking) botEl.className = 'asst-msg ok';
         }
-        if (booking) this.dispatchEvent(new CustomEvent('calnode:booked', { bubbles: true, composed: true, detail: booking }));
+        if (booking) {
+          this.dispatchEvent(new CustomEvent('openslot:booked', { bubbles: true, composed: true, detail: booking }));
+          this.dispatchEvent(new CustomEvent('calnode:booked', { bubbles: true, composed: true, detail: booking }));
+        }
       } catch (e) {
         if (typing.parentNode) typing.remove();
         this.asstAdd(t(this.i18n, 'assistant_error'), 'note');
@@ -650,6 +653,7 @@
           // there (top window, so it isn't trapped in the host page's frame).
           if (res.data && res.data.checkout_url) { (window.top || window).location.href = res.data.checkout_url; return; }
           self.state.view = 'confirm'; self.render();
+          self.dispatchEvent(new CustomEvent('openslot:booked', { bubbles: true, composed: true, detail: res.data }));
           self.dispatchEvent(new CustomEvent('calnode:booked', { bubbles: true, composed: true, detail: res.data }));
         }).catch(function (err) {
           errBox.textContent = err.message || t(self.i18n, 'booking_failed_error');
@@ -702,14 +706,18 @@
       var toggle = this.card.querySelector('.desc-toggle');
       if (toggle) toggle.addEventListener('click', function () { self.descExpanded = !self.descExpanded; self.syncDesc(); });
       this.wrap.appendChild(this.card);
-      this.wrap.appendChild(el('div', { class: 'powered', html: t(this.i18n, 'powered_by') + ' <a href="https://calnode.com" target="_blank" rel="noopener">Calnode</a>' }));
+      this.wrap.appendChild(el('div', { class: 'powered', text: t(this.i18n, 'powered_by') + ' OpenSlot' }));
       this.applyStep();
       this.cw = this.wrap.getBoundingClientRect().width || this.cw;
       requestAnimationFrame(function () { self.syncDesc(); });
     }
   }
 
-  customElements.define('calnode-booking', CalnodeBooking);
+  customElements.define('openslot-booking', CalnodeBooking);
+  // Keep existing embed snippets usable when migrating a Calnode installation.
+  if (!customElements.get('calnode-booking')) {
+    customElements.define('calnode-booking', class extends CalnodeBooking {});
+  }
 
   // ── popup mode (isolated in its own Shadow DOM so host CSS can't break it) ──
   var POPUP_STYLE = '' +
@@ -727,12 +735,17 @@
   // wirePopups) and forwarded here. window.Calnode.openPopup(slug, lang) also accepts
   // it directly for callers driving the popup from their own JS rather than a
   // data-calnode-popup button.
+  var closeActivePopup = null;
   function openPopup(slug, lang) {
+    if (!slug) return;
+    if (closeActivePopup) closeActivePopup();
+    var previousFocus = document.activeElement;
+    var previousOverflow = document.body.style.overflow;
     var hostEl = el('div', {});
     hostEl.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;');
     var sr = hostEl.attachShadow({ mode: 'open' });
     sr.appendChild(el('style', { text: POPUP_STYLE }));
-    var widget = document.createElement('calnode-booking');
+    var widget = document.createElement('openslot-booking');
     widget.setAttribute('slug', slug);
     widget.setAttribute('data-modal', '');
     if (lang) widget.setAttribute('lang', lang);
@@ -743,28 +756,69 @@
     // Spanish booking then announces "Cerrar" rather than "Close". If the widget never
     // loads, the observer simply never fires and the English label stands.
     var close = el('button', { class: 'x', html: SVG_X, 'aria-label': 'Close' });
-    new MutationObserver(function (_, obs) {
+    var languageObserver = new MutationObserver(function (_, obs) {
       if (!widget.i18n) return;
       close.setAttribute('aria-label', t(widget.i18n, 'close'));
       obs.disconnect();
-    }).observe(widget, { attributes: true, attributeFilter: ['lang'] });
-    var overlay = el('div', { class: 'ovl' }, [el('div', { class: 'wrap' }, [close, widget])]);
-    function shut() { hostEl.remove(); document.removeEventListener('keydown', onKey); }
-    function onKey(e) { if (e.key === 'Escape') shut(); }
+    });
+    languageObserver.observe(widget, { attributes: true, attributeFilter: ['lang'] });
+    var overlay = el('div', { class: 'ovl' }, [el('div', { class: 'wrap', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Book a meeting' }, [close, widget])]);
+    function shut() {
+      languageObserver.disconnect();
+      hostEl.remove();
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+      closeActivePopup = null;
+      if (previousFocus && previousFocus.isConnected && previousFocus.focus) previousFocus.focus();
+    }
+    function focusable(root) {
+      var result = [];
+      root.querySelectorAll('*').forEach(function (node) {
+        if (node.shadowRoot) result = result.concat(focusable(node.shadowRoot));
+        if (node.matches('button,input,select,textarea,a[href],[tabindex]') && !node.disabled && node.tabIndex >= 0 && node.getClientRects().length) result.push(node);
+      });
+      return result;
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); shut(); }
+      if (e.key === 'Tab') {
+        var nodes = focusable(sr);
+        var focused = document.activeElement;
+        while (focused && focused.shadowRoot && focused.shadowRoot.activeElement) focused = focused.shadowRoot.activeElement;
+        var index = nodes.indexOf(focused);
+        if (nodes.length && (index < 0 || (e.shiftKey && index === 0) || (!e.shiftKey && index === nodes.length - 1))) {
+          e.preventDefault();
+          nodes[e.shiftKey ? nodes.length - 1 : 0].focus();
+        }
+      }
+    }
     overlay.addEventListener('click', function (e) { if (e.target === overlay) shut(); });
     close.addEventListener('click', shut);
     document.addEventListener('keydown', onKey);
     sr.appendChild(overlay);
     document.body.appendChild(hostEl);
+    document.body.style.overflow = 'hidden';
+    closeActivePopup = shut;
+    close.focus();
   }
 
   function wirePopups(scope) {
-    (scope || document).querySelectorAll('[data-calnode-popup]:not([data-calnode-wired])').forEach(function (b) {
+    (scope || document).querySelectorAll('[data-openslot-popup],[data-calnode-popup]').forEach(function (b) {
       b.setAttribute('data-calnode-wired', '1');
-      b.addEventListener('click', function (e) { e.preventDefault(); openPopup(b.getAttribute('data-calnode-popup'), b.getAttribute('lang')); });
     });
   }
+  // Delegation also handles buttons inserted later by SPAs and site builders.
+  document.addEventListener('click', function (event) {
+    if (event.defaultPrevented) return;
+    var trigger = event.composedPath().find(function (node) {
+      return node instanceof Element && node.matches('[data-openslot-popup],[data-calnode-popup]');
+    });
+    if (!trigger) return;
+    event.preventDefault();
+    openPopup(trigger.getAttribute('data-openslot-popup') || trigger.getAttribute('data-calnode-popup'), trigger.getAttribute('lang'));
+  });
   if (document.readyState !== 'loading') wirePopups();
   else document.addEventListener('DOMContentLoaded', function () { wirePopups(); });
-  window.Calnode = { openPopup: openPopup, wirePopups: wirePopups };
+  window.OpenSlot = { openPopup: openPopup, wirePopups: wirePopups };
+  window.Calnode = window.OpenSlot;
 })();

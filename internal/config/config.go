@@ -12,6 +12,7 @@ import (
 
 type Config struct {
 	Port           string
+	BindHost       string // Empty listens on all interfaces; local development sets 127.0.0.1.
 	DatabaseURL    string
 	EncryptionKey  string // platform secret (KEK input); vault derives the real AES key
 	RecoverySecret string // CALNODE_RECOVERY_SECRET — escrow key stored in keystore
@@ -107,6 +108,7 @@ type Config struct {
 func Load() *Config {
 	cfg := &Config{
 		Port:        getEnv("PORT", "3000"),
+		BindHost:    getEnv("BIND_HOST", ""),
 		DatabaseURL: getEnv("DATABASE_URL", "sqlite://./data/calnode.db"),
 		BaseURL:     getEnv("BASE_URL", "http://localhost:3000"),
 
@@ -119,7 +121,7 @@ func Load() *Config {
 		SMTPTLS:         getBool("EMAIL_SMTP_TLS", false),
 		SMTPStartTLS:    getBool("EMAIL_SMTP_STARTTLS", false),
 		EmailFrom:       getEnv("EMAIL_FROM_ADDRESS", "bookings@localhost"),
-		EmailFromName:   getEnv("EMAIL_FROM_NAME", "Calnode"),
+		EmailFromName:   getEnv("EMAIL_FROM_NAME", "OpenSlot"),
 
 		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),

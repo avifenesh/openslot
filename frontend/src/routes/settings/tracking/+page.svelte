@@ -86,7 +86,7 @@
 		<div class="rounded-lg border bg-card p-6">
 			<h2 class="text-sm font-semibold">Google Analytics &amp; Tag Manager</h2>
 			<p class="mt-0.5 text-xs text-muted-foreground">
-				Enter an ID and Calnode loads the official tag on your booking page automatically — no snippet to
+				Enter an ID and OpenSlot loads the official tag on your booking page automatically · no snippet to
 				paste, and the page's CSP is handled for you. Leave a field blank to turn that tag off.
 			</p>
 			<div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -94,7 +94,7 @@
 					<Label for="gtm-id">GTM Container ID</Label>
 					<Input id="gtm-id" bind:value={gtmId} placeholder="GTM-XXXXXXX" class="font-mono" />
 					<p class="text-xs text-muted-foreground">
-						Recommended — manages GA4 + Ads tags. Trigger them on the
+						Recommended · manages GA4 + Ads tags. Trigger them on the
 						<code class="rounded bg-muted px-1">calnode_booking_confirmed</code> dataLayer event below.
 					</p>
 				</div>
@@ -113,7 +113,7 @@
 		<div class="rounded-lg border bg-card p-6">
 			<h2 class="text-sm font-semibold">Code injection (head)</h2>
 			<p class="mt-0.5 text-xs text-muted-foreground">
-				Raw HTML/JS injected into the &lt;head&gt; of your public booking and manage pages — for any tag
+				Raw HTML/JS injected into the &lt;head&gt; of your public booking and manage pages · for any tag
 				<em>not</em> covered above (Meta Pixel, Plausible, custom). It runs on visitors' browsers; only admins can set it.
 			</p>
 			<div class="mt-4 space-y-1.5">
@@ -127,7 +127,7 @@
 					placeholder="https://www.googletagmanager.com https://*.google-analytics.com" />
 				<p class="text-xs text-muted-foreground">
 					Leave blank to allow any <code class="rounded bg-muted px-1">https:</code> origin while injection is
-					active — simplest, and GTM-managed tags just work. Fill in to lock the page's CSP to only these
+					active · simplest, and GTM-managed tags just work. Fill in to lock the page's CSP to only these
 					origins (space-separated); tags from other domains will then be blocked.
 				</p>
 			</div>
@@ -150,7 +150,7 @@
 			{#if dlEnabled}
 				<div class="mt-4 space-y-2">
 					<p class="text-xs font-medium text-muted-foreground">
-						Fields to include — untick anything you don't want exposed to the browser / GTM.
+						Fields to include · untick anything you don't want exposed to the browser / GTM.
 					</p>
 					<div class="grid grid-cols-2 gap-x-4 gap-y-1">
 						{#each availableFields as key}
