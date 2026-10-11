@@ -17,4 +17,4 @@ Inherited optional capabilities, including video, payments, and a built-in model
 
 This repository has not published an OpenSlot container or hosted service. Upstream release images and deployment links retained in historical documentation refer to Calnode, not OpenSlot. Build this source to run these changes.
 
-Upstream GitHub workflows are archived in `.github/upstream-workflows/` and cannot run there. The replacement workflow only checks formatting and builds on a self-hosted runner. GitHub Actions is disabled in the initial private repository until a runner is attached. Full local checks are the initial validation record.
+Upstream GitHub workflows and Dependabot scheduling are archived in `.github/upstream-workflows/` and cannot run there. The replacement workflow only checks formatting and builds on a self-hosted runner. GitHub Actions is disabled in the initial private repository until a runner is attached. Full local checks are the initial validation record.
