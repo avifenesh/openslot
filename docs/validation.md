@@ -4,12 +4,12 @@ This report separates executable/local behavior from external-account setup. No 
 
 ## v0.1.0 local validation (2026-10-12)
 
-- Full Go suite: 30 passing packages and 1,210 passing test cases, including subtests. The opt-in installed-agent runtime test was skipped; five other packages contain no tests.
+- Full Go suite: 30 passing packages and 1,211 passing test cases, including subtests. The opt-in installed-agent runtime test was skipped; five other packages contain no tests.
 - Public booking/video JavaScript: 24 tests passed.
 - Frontend type checks: zero errors and zero warnings. Ten browser component-style tests passed.
 - Executable smoke: private first-run configuration, owner signup, availability, meeting creation, booking, restart persistence, cancellation, readiness and stopped-server diagnostics passed.
 - Installer: valid local archive installation passed; a corrupted archive was rejected without replacing the existing executable.
-- CLI/service tests: help/version without side effects, invalid arguments, occupied port, relative SQLite paths, credential precedence, service replacement backup and uninstall preservation passed. Linux systemd startup is also checked on the installed release.
+- CLI/service tests: help/version without side effects, invalid arguments, occupied port, relative SQLite paths, credential precedence, service replacement backup and uninstall preservation passed. The generated unit also passes the real systemd parser with paths containing spaces, dollar signs and percent signs. Linux systemd startup is also checked on the installed release.
 - Fresh review: agent `.env` compatibility, SQLite URI anchoring and bundled notices were corrected and re-reviewed.
 
 Browser and shipped-asset results are added to the release notes after checking the final executable. External accounts listed below were not exercised live.

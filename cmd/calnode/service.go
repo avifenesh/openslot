@@ -16,15 +16,16 @@ import (
 
 const serviceMarker = "# Managed by openslot service install."
 
-func unitQuote(value string, command bool) string {
-	value = strings.ReplaceAll(value, "%", "%%")
-	if command {
-		value = strings.ReplaceAll(value, "$", "$$")
-	}
-	return strconv.Quote(value)
+// Path directives take raw values with specifier escaping, not shell quotes.
+func unitPath(value string) string { return strings.ReplaceAll(value, "%", "%%") }
+
+// The executable token does not expand environment variables; other argv do.
+func unitExecutable(value string) string { return strconv.Quote(unitPath(value)) }
+func unitArgument(value string) string {
+	return strconv.Quote(strings.ReplaceAll(unitPath(value), "$", "$$"))
 }
 func serviceUnit(executable, configFile string) string {
-	return serviceMarker + "\n[Unit]\nDescription=OpenSlot scheduling server\nConditionPathExists=" + unitQuote(configFile, false) + "\n\n[Service]\nType=simple\nWorkingDirectory=" + unitQuote(filepath.Dir(configFile), false) + "\nExecStart=" + unitQuote(executable, true) + " serve --config " + unitQuote(configFile, true) + "\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=95s\n\n[Install]\nWantedBy=default.target\n"
+	return serviceMarker + "\n[Unit]\nDescription=OpenSlot scheduling server\nConditionPathExists=" + unitPath(configFile) + "\n\n[Service]\nType=simple\nWorkingDirectory=" + unitPath(filepath.Dir(configFile)) + "\nExecStart=" + unitExecutable(executable) + " serve --config " + unitArgument(configFile) + "\nRestart=on-failure\nRestartSec=5s\nTimeoutStopSec=95s\n\n[Install]\nWantedBy=default.target\n"
 }
 func systemctlEnv() []string {
 	env := os.Environ()
@@ -97,6 +98,11 @@ func runService(args []string, explicit string) error {
 		executable, e = filepath.EvalSymlinks(executable)
 		if e != nil {
 			return e
+		}
+		for _, value := range []string{executable, path, filepath.Dir(path)} {
+			if strings.ContainsAny(value, "\r\n") || strings.TrimRight(value, " \t\\") != value {
+				return errors.New("systemd service paths cannot contain line breaks or end with whitespace or a backslash")
+			}
 		}
 		old, e := os.ReadFile(unit)
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
