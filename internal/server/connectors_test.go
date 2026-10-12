@@ -189,3 +189,47 @@ func TestInvalidGoogleConfigurationDoesNotOfferSignIn(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionCookieSecurityDoesNotDependOnGoogleReadiness(t *testing.T) {
+	for _, tc := range []struct {
+		name, id, secret string
+		secure           bool
+	}{
+		{"malformed Google on HTTPS", "project-id", "secret", true},
+		{"missing Google secret on HTTPS", "valid.apps.googleusercontent.com", "", true},
+		{"local HTTP control", "project-id", "secret", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			database, err := db.Open("sqlite://:memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { database.Close() })
+			if err := db.Migrate(database); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			app, drain := New(ctx, &config.Config{BaseURL: "https://schedule.example.test", DataDir: t.TempDir(), CookieSecure: tc.secure, GoogleClientID: tc.id, GoogleClientSecret: tc.secret}, database, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			t.Cleanup(func() { cancel(); drain() })
+			claim := httptest.NewRecorder()
+			app.ServeHTTP(claim, httptest.NewRequest("POST", "/v1/auth/claim", strings.NewReader(`{"name":"Owner","email":"owner@example.test","password":"Synthetic-password-2026","timezone":"UTC"}`)))
+			if claim.Code >= 300 {
+				t.Fatalf("claim: %d %s", claim.Code, claim.Body.String())
+			}
+			login := httptest.NewRecorder()
+			app.ServeHTTP(login, httptest.NewRequest("POST", "/v1/auth/login/email", strings.NewReader(`{"email":"owner@example.test","password":"Synthetic-password-2026"}`)))
+			if login.Code != 200 {
+				t.Fatalf("login: %d %s", login.Code, login.Body.String())
+			}
+			for _, cookie := range login.Result().Cookies() {
+				if cookie.Name == "calnode_session" {
+					if cookie.Secure != tc.secure {
+						t.Fatalf("session Secure=%v, want %v", cookie.Secure, tc.secure)
+					}
+					return
+				}
+			}
+			t.Fatal("session cookie missing")
+		})
+	}
+}

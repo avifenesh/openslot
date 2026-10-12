@@ -40,6 +40,7 @@ import (
 func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logger) (*handler.Handler, func()) {
 	h := handler.New(db, logger)
 	h.SetBaseURL(cfg.BaseURL)
+	h.SetCookieSecure(cfg.CookieSecure)
 	h.SetPublicBaseURL(cfg.PublicBaseURL)
 	// DATA_DIR, defaulting to the relative "data" every deployment has always used.
 	// The fallback is repeated here because tests build a Config literal that skips

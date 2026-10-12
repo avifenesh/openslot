@@ -163,6 +163,10 @@ func (h *Handler) SetBaseURL(url string) {
 	h.baseURL = url
 }
 
+// SetCookieSecure initializes session and OAuth cookie policy independently of providers.
+// Call it during server construction before serving requests.
+func (h *Handler) SetCookieSecure(secure bool) { h.secureCookie = secure }
+
 // SetPublicBaseURL sets the booker-facing host used for booking-page links and
 // outbound email links. When empty, publicURL falls back to baseURL.
 func (h *Handler) SetPublicBaseURL(url string) {

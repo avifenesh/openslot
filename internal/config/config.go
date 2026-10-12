@@ -54,8 +54,8 @@ type Config struct {
 
 	// CookieSecure sets the Secure flag on session cookies. Defaults to true
 	// when BASE_URL starts with https://, but can be overridden explicitly via
-	// COOKIE_SECURE=false for HTTPS-terminated-at-proxy setups where the binary
-	// itself listens on plain HTTP and BASE_URL is set correctly.
+	// COOKIE_SECURE. Keep it true when the browser uses HTTPS, including when
+	// a reverse proxy terminates TLS and forwards plain HTTP to this server.
 	CookieSecure bool
 
 	// EmbedAllowedOrigins lists the origins permitted to call the public booking
