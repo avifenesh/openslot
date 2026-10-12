@@ -81,7 +81,7 @@ test.beforeAll(async () => {
 		cwd: dataDirectory,
 		stdio: ['ignore', serverLog, serverLog],
 		// Deliberately exclude any real calendar, mail or model credentials from tests.
-		env: { PATH: process.env.PATH, HOME: homedir(), GOMAXPROCS: '3', PORT: String(port), BIND_HOST: '127.0.0.1', BASE_URL: base, DATABASE_URL: `sqlite://${join(dataDirectory, 'test.db')}`, DATA_DIR: join(dataDirectory, 'uploads'), CALNODE_ENCRYPTION_KEY: randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET: randomBytes(32).toString('hex'), LOG_LEVEL: 'error' },
+		env: { PATH: process.env.PATH, HOME: homedir(), GOMAXPROCS: process.env.OPENSLOT_TEST_GOMAXPROCS ?? '3', PORT: String(port), BIND_HOST: '127.0.0.1', BASE_URL: base, DATABASE_URL: `sqlite://${join(dataDirectory, 'test.db')}`, DATA_DIR: join(dataDirectory, 'uploads'), CALNODE_ENCRYPTION_KEY: randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET: randomBytes(32).toString('hex'), LOG_LEVEL: 'error' },
 	});
 	await expect.poll(async () => {
 		if (child.exitCode !== null) throw new Error(`Test server exited: ${child.exitCode}`);
@@ -382,6 +382,238 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	expect(externalRequests).toEqual([]);
 });
 
+async function controlsTheme(page: Page, theme: 'light' | 'dark', mobile: boolean) {
+	if (await page.locator('html').evaluate(el => el.classList.contains('dark')) === (theme === 'dark')) return;
+	if (mobile) await page.getByRole('button', { name: 'Open navigation' }).click();
+	await page.getByRole('button', { name: theme === 'dark' ? 'Use dark theme' : 'Use light theme' }).click();
+	if (mobile) await page.keyboard.press('Escape');
+}
+
+async function controlsHitTarget(locator: ReturnType<Page['locator']>) {
+	await locator.scrollIntoViewIfNeeded();
+	await expect.poll(() => locator.evaluate(el => {
+		const box = el.getBoundingClientRect();
+		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+		return !!hit && (el === hit || el.contains(hit));
+	}), { message: `Hit target for ${await locator.getAttribute('aria-label') ?? await locator.textContent()}` }).toBe(true);
+}
+
+test('reported app cards open local setup in both themes and viewport sizes', async ({ page }) => {
+	const browserErrors: string[] = [];
+	page.on('console', message => { if (message.type() === 'error') browserErrors.push(message.text()); });
+	const failedRoutes: string[] = [];
+	page.on('response', response => { if (response.status() >= 400) failedRoutes.push(`${response.status()} ${new URL(response.url()).pathname}`); });
+	for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+		await page.setViewportSize({ width, height });
+		for (const theme of ['light', 'dark'] as const) {
+			await page.goto(base + '/admin/apps');
+			await expect(page.getByRole('button', { name: 'Connect Notion', exact: true })).toBeVisible();
+			await controlsTheme(page, theme, device === 'mobile');
+			await shot(page, `reported-apps-${device}-${theme}-closed`);
+			const card = (name: string) => page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
+			const calendar = card('Apple, Fastmail & CalDAV').getByRole('link', { name: 'Connect calendar', exact: true });
+			await controlsHitTarget(calendar);
+			await calendar.click();
+			await expect(page).toHaveURL(base + '/admin/calendar?provider=caldav');
+			await expect(page.getByText('CalDAV (Apple iCloud, Fastmail, Nextcloud)', { exact: true })).toBeVisible();
+			await expect(page.getByLabel('Provider', { exact: true })).toBeVisible();
+			await expect(page.getByLabel('Username / email', { exact: true })).toBeVisible();
+			await expect(page.getByLabel('App-specific password', { exact: true })).toHaveAttribute('type', 'password');
+			await shot(page, `reported-caldav-${device}-${theme}`);
+			await page.goto(base + '/admin/apps');
+			const gmail = card('Gmail').getByRole('link', { name: 'Set up Google OAuth', exact: true });
+			await controlsHitTarget(gmail);
+			await gmail.click();
+			await expect(page).toHaveURL(base + '/admin/settings/google');
+			await expect(page.getByLabel('Client ID', { exact: true })).toBeVisible();
+			await expect(page.getByLabel('Client Secret', { exact: true })).toHaveAttribute('type', 'password');
+			await shot(page, `reported-gmail-${device}-${theme}`);
+			await page.goto(base + '/admin/apps');
+			const notion = card('Notion').getByRole('button', { name: 'Connect Notion', exact: true });
+			await controlsHitTarget(notion);
+			await notion.click();
+			await expect(page.getByLabel('Notion integration token', { exact: true })).toHaveAttribute('type', 'password');
+			await expect(page.getByLabel('Parent page URL or ID', { exact: true })).toBeVisible();
+			await controlsHitTarget(page.getByRole('button', { name: 'Connect and create bookings database', exact: true }));
+			await shot(page, `reported-notion-${device}-${theme}-setup`);
+			if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
+			const gmailHelp = card('Gmail').getByRole('button', { name: 'Google setup and permissions', exact: true });
+			await controlsHitTarget(gmailHelp);
+			await gmailHelp.click();
+			await expect(page.getByRole('dialog', { name: 'Google setup and permissions', exact: true })).toBeVisible();
+			await expect(page.getByRole('dialog').getByRole('link', { name: 'Open Google settings' })).toHaveAttribute('href', '/admin/settings/google');
+			await expect(page.getByLabel('Gmail redirect URI', { exact: true })).toHaveValue(base + '/v1/apps/gmail/callback');
+			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+			await shot(page, `reported-apps-${device}-${theme}-expanded`);
+			if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape');
+			const agent = card('Your agent').getByRole('link', { name: 'Choose an agent', exact: true });
+			await controlsHitTarget(agent);
+			await agent.click();
+			await expect(page).toHaveURL(base + '/admin/agent');
+			await expect(page.getByRole('heading', { name: 'Connect your agent.', exact: true })).toBeVisible();
+			await shot(page, `reported-agent-${device}-${theme}`);
+		}
+	}
+	expect(browserErrors).toEqual([]);
+	expect(failedRoutes).toEqual([]);
+	expect(errors).toEqual([]);
+	expect(externalRequests).toEqual([]);
+});
+
+test('reported date overrides select save reload and delete in both themes and viewport sizes', async ({ page }) => {
+	const browserErrors: string[] = [];
+	page.on('console', message => { if (message.type() === 'error') browserErrors.push(message.text()); });
+	const month = new Date().toISOString().slice(0, 7);
+	async function pickDate(label: string, day: number) {
+		const trigger = page.getByLabel(label, { exact: true });
+		await trigger.scrollIntoViewIfNeeded();
+		expect(await page.getByLabel(label, { exact: true }).count(), `${label} must name its date control`).toBe(1);
+		await page.locator('label').filter({ hasText: new RegExp(`^${label === 'Date' ? 'Date' : 'To \\(optional\\)'}$`) }).click();
+		expect(await trigger.getAttribute('aria-expanded'), `${label} click opens picker`).toBe('true');
+		const date = page.locator(`[data-calendar-day][data-value="${month}-${String(day).padStart(2, '0')}"]`);
+		await controlsHitTarget(date);
+		await page.screenshot({ path: join(screenshots, `reported-picker-${page.viewportSize()!.width}-${await page.locator('html').evaluate(el => el.classList.contains('dark'))}-${day}.png`), animations: 'disabled' });
+		await date.click();
+		await expect(page.locator('[data-popover-content]')).toHaveCount(0);
+		await expect(trigger).toHaveAccessibleDescription((await trigger.innerText()).trim());
+	}
+	async function saveAndReload() {
+		const pending = page.waitForResponse(response => response.url().endsWith('/v1/availability-overrides') && response.request().method() === 'POST');
+		await page.getByRole('button', { name: 'Add override', exact: true }).click();
+		const response = await pending;
+		expect(response.status()).toBe(201);
+		const submitted = response.request().postDataJSON();
+		if (submitted.reason === 'custom_hours') expect(submitted).not.toHaveProperty('end_date');
+		await page.reload();
+		await expect(page.getByLabel('Date', { exact: true })).toBeVisible();
+	}
+	async function removeRow(row: ReturnType<Page['locator']>) {
+		const remove = row.getByRole('button', { name: /^Delete override/ });
+		await expect(remove).toBeVisible();
+		await controlsHitTarget(remove);
+		const box = (await remove.boundingBox())!;
+		expect(box.x).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+		await remove.click();
+		await expect(page.getByRole('alertdialog')).toBeVisible();
+		const pending = page.waitForResponse(response => response.url().includes('/v1/availability-overrides/') && response.request().method() === 'DELETE');
+		await page.getByRole('button', { name: 'Remove', exact: true }).click();
+		expect((await pending).status()).toBe(204);
+		await page.reload();
+		await expect(row).toHaveCount(0);
+	}
+	for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844], ['narrow', 320, 844]] as const) {
+		await page.setViewportSize({ width, height });
+		for (const theme of ['light', 'dark'] as const) {
+			await page.goto(base + '/admin/availability');
+			await expect(page.getByLabel('Date', { exact: true })).toBeVisible();
+			await controlsTheme(page, theme, device !== 'desktop');
+			await pickDate('Date', 19);
+			await saveAndReload();
+			const single = page.locator('tbody tr').filter({ hasText: 'Day off' });
+			await expect(single).toContainText('1 day');
+			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+			await shot(page, `reported-override-${device}-${theme}-single`);
+			await removeRow(single);
+			await pickDate('Date', 20);
+			await pickDate('To (optional)', 22);
+			await page.getByLabel('Type', { exact: true }).click();
+			await controlsHitTarget(page.getByRole('option', { name: 'Out of office', exact: true }));
+			await page.getByRole('option', { name: 'Out of office', exact: true }).click();
+			await saveAndReload();
+			const range = page.locator('tbody tr').filter({ hasText: '3 days' });
+			await expect(range).toContainText('Out of office');
+			expect(await page.evaluate(() => document.documentElement.scrollWidth), `${device} ${theme} saved range stays within viewport`).toBeLessThanOrEqual(width);
+			await shot(page, `reported-override-${device}-${theme}-range`);
+			await removeRow(range);
+			await pickDate('Date', 23);
+			// An earlier end date stays in state when custom hours hides the range control.
+			await pickDate('To (optional)', 22);
+			await page.getByLabel('Type', { exact: true }).click();
+			await page.getByRole('option', { name: 'Custom hours', exact: true }).click();
+			await expect(page.getByLabel('To (optional)', { exact: true })).toHaveCount(0);
+			await page.getByLabel('From', { exact: true }).click();
+			await page.getByRole('option', { name: '10am', exact: true }).click();
+			await page.getByLabel('To', { exact: true }).click();
+			await page.getByRole('option', { name: '3pm', exact: true }).click();
+			await shot(page, `reported-override-${device}-${theme}-custom`);
+			await saveAndReload();
+			const custom = page.locator('tbody tr').filter({ hasText: 'Custom hours' });
+			await expect(custom).toHaveCount(1);
+			const persisted = await api(page.request, '/v1/availability-overrides');
+			expect(persisted.items).toHaveLength(1);
+			expect(persisted.items[0]).toMatchObject({ date: month + '-23', start_time: '10:00', end_time: '15:00', reason: 'custom_hours' });
+			await expect(custom).toContainText('10am – 3pm');
+			expect(await page.evaluate(() => document.documentElement.scrollWidth), `${device} ${theme} custom hours stays within viewport`).toBeLessThanOrEqual(width);
+			await removeRow(custom);
+			await expect(page.getByText('No overrides yet.', { exact: true })).toBeVisible();
+		}
+	}
+	expect(browserErrors).toEqual([]);
+	expect(errors).toEqual([]);
+	expect(externalRequests).toEqual([]);
+});
+
+test('Notion dialog traps focus, closes, reopens and keeps mocked errors inside', async ({ page }) => {
+	let mockedRequests = 0;
+	await page.route('**/v1/apps/notion', async route => {
+		expect(route.request().method()).toBe('PUT');
+		mockedRequests++;
+		await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetic Notion setup error' }) });
+	});
+	for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844], ['narrow', 320, 844]] as const) {
+		await page.setViewportSize({ width, height });
+		for (const theme of ['light', 'dark'] as const) {
+			await page.goto(base + '/admin/apps');
+			await expect(page.getByRole('button', { name: 'Connect Notion', exact: true })).toBeVisible();
+			await controlsTheme(page, theme, device !== 'desktop');
+			const opener = page.getByRole('button', { name: 'Connect Notion', exact: true });
+			const dialog = page.getByRole('dialog', { name: 'Connect Notion', exact: true });
+			await opener.focus();
+			await page.keyboard.press('Enter');
+			await expect(dialog).toBeVisible();
+			await expect.poll(() => dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+			for (let index = 0; index < 7; index++) {
+				await page.keyboard.press('Tab');
+				expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+			}
+			await page.keyboard.press('Shift+Tab');
+			expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+			await page.keyboard.press('Escape');
+			await expect(dialog).toHaveCount(0);
+			await expect(opener).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(dialog).toBeVisible();
+			await dialog.getByLabel('Notion integration token', { exact: true }).fill('synthetic-token-never-forwarded');
+			await dialog.getByLabel('Parent page URL or ID', { exact: true }).fill('synthetic-parent');
+			const response = page.waitForResponse(result => result.url().endsWith('/v1/apps/notion') && result.request().method() === 'PUT');
+			await dialog.getByRole('button', { name: 'Connect and create bookings database', exact: true }).click();
+			expect((await response).status()).toBe(400);
+			await expect(dialog.getByRole('alert')).toHaveText('Synthetic Notion setup error');
+			await expect(page.getByRole('alert')).toHaveCount(1);
+			await expect(dialog.getByRole('button', { name: 'Connect and create bookings database', exact: true })).toBeEnabled();
+			const bounds = (await dialog.boundingBox())!;
+			expect(bounds.x).toBeGreaterThanOrEqual(0);
+			expect(bounds.y).toBeGreaterThanOrEqual(0);
+			expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+			expect(bounds.y + bounds.height).toBeLessThanOrEqual(height);
+			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+			await shot(page, `notion-error-${device}-${theme}`);
+			await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await expect(opener).toBeFocused();
+			await opener.click();
+			await expect(dialog).toBeVisible();
+			await expect(dialog.getByRole('alert')).toHaveCount(0);
+			await expect(dialog.getByLabel('Notion integration token', { exact: true })).toHaveValue('');
+			await page.keyboard.press('Escape');
+		}
+	}
+	expect(mockedRequests).toBe(6);
+	expect(errors).toEqual([]);
+	expect(externalRequests).toEqual([]);
+});
+
 test('responsive views, dark theme, revocation and no client exceptions', async ({ page }) => {
 	// Put one synthetic booking in the past to exercise the dashboard count contract.
 	execFileSync('python3', ['-c', "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"UPDATE bookings SET start_at='2020-01-01T09:00:00Z', end_at='2020-01-01T09:30:00Z' WHERE status='confirmed' AND id=(SELECT id FROM bookings WHERE status='confirmed' ORDER BY start_at LIMIT 1)\"); c.commit(); c.close()", join(dataDirectory, 'test.db')]);
@@ -471,7 +703,8 @@ test('app connections and provider-specific setup are usable without provider ke
  await page.goto(base+'/admin/apps');
  await expect(page.getByRole('heading',{name:'Gmail',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Connect Notion',exact:true}).click();
- await page.getByText('Google setup and permissions',{exact:true}).click();
+ await page.getByRole('dialog', { name: 'Connect Notion', exact: true }).getByRole('button', { name: 'Close', exact: true }).click();
+ await page.getByRole('button', { name: 'Google setup and permissions', exact: true }).click();
  await expect(page.getByLabel('Gmail redirect URI',{exact:true})).toHaveValue(base+'/v1/apps/gmail/callback');
  await shot(page,'apps-mobile-light');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -530,17 +763,21 @@ test('UI regression matrix: controls, connector setup and independent app cards'
 					expect((await page.getByLabel('Search connectors').boundingBox())!.height).toBe(device === 'mobile' ? 44 : 40);
 				}
 				if (screen === 'apps') {
-					const otherCard = page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Your agent', exact: true }) });
+					const otherCard = page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Your agent', exact: true, includeHidden: true }) });
 					await expect(otherCard).toBeVisible();
+					const notionCard = page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Notion', exact: true, includeHidden: true }) });
 					const before = (await otherCard.boundingBox())!;
+					const notionBefore = (await notionCard.boundingBox())!;
 					await page.getByRole('button', { name: 'Connect Notion', exact: true }).click();
+					await expect(page.getByRole('dialog', { name: 'Connect Notion', exact: true })).toBeVisible();
 					await expect(page.getByLabel('Notion integration token', { exact: true })).toBeVisible();
 					const after = (await otherCard.boundingBox())!;
-					expect(after.height).toBeCloseTo(before.height, 0);
-					if (device === 'desktop') {
-						const notion = (await page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Notion', exact: true }) }).boundingBox())!;
-						expect(notion.height).toBeGreaterThan(after.height);
+					const notionAfter = (await notionCard.boundingBox())!;
+					for (const dimension of ['width', 'height'] as const) {
+						expect(after[dimension]).toBeCloseTo(before[dimension], 0);
+						expect(notionAfter[dimension]).toBeCloseTo(notionBefore[dimension], 0);
 					}
+					if (device === 'desktop') expect(notionAfter.height).toBeCloseTo(after.height, 0);
 				}
 				if (screen === 'inbox') {
 					await expect(page.getByLabel('Dedicated email address')).toHaveValue('scheduling@example.test');
