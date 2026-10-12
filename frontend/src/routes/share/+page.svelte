@@ -22,14 +22,16 @@
 		origin = window.location.origin;
 		async function load() {
 			try {
-				const result = await api.get<{items:EventType[]}>('/v1/event-types');
+				const result = await api.get<{items:EventType[];public_base_url?:string}>('/v1/event-types');
 				if (cancelled) return;
+				origin = result.public_base_url || window.location.origin;
 				events = (result.items ?? []).filter(event => event.is_active && !event.archived);
 				slug = events[0]?.slug ?? '';
 				if (!customElements.get('openslot-booking')) {
 					await new Promise<void>((resolve, reject) => {
 						const script = document.createElement('script');
-						script.src = `${origin}/embed.js`; script.async = true;
+						// Render the local preview without requiring the public domain to be reachable.
+					script.src = `${window.location.origin}/embed.js`; script.async = true;
 						script.onload = () => resolve(); script.onerror = () => { script.remove(); reject(new Error('The embed preview could not load. Reload to try again.')); };
 						document.head.appendChild(script);
 					});

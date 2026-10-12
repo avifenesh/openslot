@@ -12,6 +12,7 @@
 
 	let items: EventType[] = $state([]);
 	let loading = $state(true);
+	let publicOrigin = $state('');
 	let showCreate = $state(false);
 
 	let form = $state({ slug: '', name: '', description: '', duration_minutes: 30 });
@@ -29,8 +30,9 @@
 
 	async function load() {
 		try {
-			const res = await api.get<{ items: EventType[] }>('/v1/event-types');
+			const res = await api.get<{ items: EventType[]; public_base_url?: string }>('/v1/event-types');
 			items = res.items;
+			publicOrigin = res.public_base_url || window.location.origin;
 		} catch (e: any) {
 			toast.error(e.message || 'Could not load event types');
 		} finally {
@@ -113,7 +115,7 @@
 	}
 
 	function bookLink(slug: string) {
-		return `${window.location.origin}/book/${slug}`;
+		return `${publicOrigin}/book/${encodeURIComponent(slug)}`;
 	}
 </script>
 

@@ -167,3 +167,24 @@ func TestRestoreUser_reenablesLogin(t *testing.T) {
 		t.Errorf("post-restore auth: got %d; want 200", rec.Code)
 	}
 }
+
+func TestArchiveUser_blockedBySecondaryHostBooking(t *testing.T) {
+	h, database, ownerKey, ownerID := setupWorkspaceWithDB(t)
+	for _, query := range []string{
+		`INSERT INTO users(id,email,name,iana_timezone) VALUES('secondary','secondary@example.test','Secondary','UTC')`,
+		`INSERT INTO event_types(id,user_id,slug,name,duration_minutes) VALUES('collective','` + ownerID + `','collective','Collective',30)`,
+		`INSERT INTO bookings(id,event_type_id,host_id,start_at,end_at,status) VALUES('group-booking','collective','` + ownerID + `','2099-01-01T10:00:00Z','2099-01-01T10:30:00Z','confirmed')`,
+		`INSERT INTO booking_hosts(id,booking_id,user_id) VALUES('secondary-seat','group-booking','secondary')`,
+	} {
+		if _, err := database.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := authReq(http.MethodPost, "/v1/users/secondary/archive", "", ownerKey)
+	req.SetPathValue("id", "secondary")
+	rec := httptest.NewRecorder()
+	h.RequireAuth(h.ArchiveUser)(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("secondary host with an upcoming booking must not be archived: %d %s", rec.Code, rec.Body)
+	}
+}

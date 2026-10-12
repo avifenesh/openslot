@@ -90,7 +90,7 @@
 </script>
 
 <svelte:window onkeydown={navigationKey} />
-<Toaster position="bottom-right" />
+<Toaster position="top-center" mobileOffset={{ top: 80, left: 16, right: 16 }} closeButton />
 {#snippet navGroup(items: typeof navigation)}
 	{#each items as item}
 		<a href={`${base}${item.path}`} class:current={active(item.path)} aria-current={active(item.path) ? 'page' : undefined} onclick={() => menuOpen = false}>

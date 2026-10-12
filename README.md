@@ -1,127 +1,68 @@
 # OpenSlot
 
-Free, self-hostable scheduling. Share a booking link, put it on your website, or let your existing agent manage it through MCP or the REST API.
+Free, self-hosted scheduling in one executable. Share a booking link, embed a calendar on your website, or let your existing agent arrange a meeting by email.
 
-OpenSlot is a modified fork of [Calnode](https://github.com/Calnode/calnode), released under [Apache-2.0](LICENSE). It is an independent project. See [FORK.md](FORK.md) for attribution, inherited features, and changes.
+No software subscription, model account, or database server is required. Hosting, email delivery, and external providers may have their own costs.
 
-## What you can do
-
-- Set working hours and create meeting types with different durations.
-- Share public booking pages. Guests need no account.
-- Embed an inline calendar or a popup booking button on another website.
-- Connect an existing agent to find availability, create, read, reschedule, and cancel bookings.
-- Create separate API keys for agents and revoke them from the app.
-- Connect Google, Microsoft, or CalDAV calendars through the inherited integrations.
-- Use a simpler dashboard with setup steps, upcoming meetings, and meeting links, in light or dark mode.
-
-There are no software subscription tiers. Hosting, a domain, email delivery, and your own agent provider may have their own costs. The scheduler works without a model or an AI subscription.
-
-## Run locally
-
-Requires Go 1.26 or newer, Node.js 22.12 or newer, pnpm 10.32.1, and Python 3 for the first-run configuration helper.
+## Install and run
 
 ```sh
-make build
-make run
+curl -fsSL https://raw.githubusercontent.com/avifenesh/openslot/main/scripts/install.sh | sh
+~/.local/bin/openslot
 ```
 
-Open **http://127.0.0.1:8788/admin/** and create the owner account. Then choose your hours and create a meeting type. Connect a calendar to include meetings booked elsewhere in conflict checks.
+Open **http://127.0.0.1:8788/admin/**. Create your owner account, set your hours, and add a meeting type. Your booking link is ready.
 
-The launch helper creates `.env` once, with randomly generated persistent encryption keys, and listens only on `127.0.0.1`. It never replaces an existing `.env`. The database and uploaded files live in `data/`. Keep `.env` and `data/` in a secure backup. An inherited deployment can retain its existing configuration.
+The installer verifies the release checksum. The executable includes the web interface, SQLite support, and timezone data. First run creates persistent configuration and encryption keys. You do not need Go, Node.js, pnpm, Python, or Docker.
 
-The Go executable embeds the built frontend. After a frontend change, run `make build` and restart the server. Restarting an old executable does not update the UI.
+[Download releases](https://github.com/avifenesh/openslot/releases) · [Installation and upgrades](docs/getting-started.md) · [Configuration](docs/configuration.md)
 
-## Connect your agent
+For a Linux service that starts at sign-in:
 
-Open **Your agent** and choose a connector. OpenSlot generates the configuration format for Codex, Claude Code, Claude, Google Antigravity, Cursor, Gemini CLI, VS Code/Copilot, or another HTTP MCP client. Model-provider adapters cover OpenAI, Anthropic, Amazon Bedrock through AgentCore, GLM/Z.ai, and Grok/xAI.
+```sh
+openslot service install --start
+openslot doctor
+```
 
-Create a separate OpenSlot key for each agent. Copy or download its configuration, then run **Check OpenSlot connection** to verify the key and discover scheduling tools. This check reads the tool catalog. It does not send a model request, change bookings, or prove the external agent has connected. A key's last-used time includes this check.
+## What it does
 
-Provider API keys stay in your agent environment. OpenSlot stores only a hash of each OpenSlot key and shows its plaintext value once. Keys inherit your account's role. They can read and change data allowed by that role, so use a member account when that is the access the agent should have. Revoke a key to stop further requests.
+- **Booking links and embeds.** Guests book without an account. Inline calendars and popup buttons work on other websites.
+- **Availability.** Weekly hours, date overrides, buffers, notice periods, timezone handling, and conflict checks.
+- **Meeting management.** Different meeting types, intake questions, rescheduling, cancellation, teams, and host routing.
+- **Calendar connections.** Google Calendar, Microsoft 365, iCloud, Fastmail, and other CalDAV servers.
+- **Email and Notion.** Booking notifications through Gmail, SMTP, or Resend, plus a dedicated Notion bookings database.
+- **Your agent.** MCP and REST tools for Codex, Claude Code, Antigravity, Cursor, Gemini CLI, VS Code, and provider-based agents.
+- **Inbox scheduling.** CC a dedicated Gmail address. Your agent checks availability and replies with valid times. Guests choose and book.
 
-The provider examples read model IDs from your environment instead of pinning a model that may be unavailable in your account. Codex reads `OPENSLOT_API_KEY` from its launch environment. API examples list the additional environment variables and SDK dependency on the setup screen. OpenAI approval requests continue through your agent's approval flow; xAI does not support OpenAI's `require_approval` parameter.
+Calendar/email services require their own account setup. OpenSlot does not supply a shared OAuth application or hosted model. The scheduler works without them; connected calendars add external busy times, and a configured sender enables email delivery.
 
-Claude's app connector uses the existing OAuth sign-in flow. Review and revoke those grants under **Agent authorizations**. The Bedrock adapter is an AgentCore harness tool entry; agents using Bedrock through Codex or Claude Code use that client's adapter.
+## Bring your agent
 
-Cloud-hosted clients need a publicly reachable HTTPS deployment. Localhost works only for clients on the same computer. The setup screen flags addresses that are visibly local, but it cannot prove external DNS or firewall reachability.
+Open **Your agent**, choose your client, and create an OpenSlot key. Copy the generated setup into that agent. Your model-provider credentials stay there.
 
-The same key works with the REST API. The MCP and REST interfaces share the scheduling engine. A browser check and protocol tests cover authenticated tool discovery, invalid keys, and revoked keys. Generated JSON, TOML, and Python examples are parsed during validation; live model-provider accounts are not used by the test suite.
+OpenAI, Anthropic, Bedrock, GLM, and Grok can be used through supported agent adapters or the external webhook worker. The connection check verifies OpenSlot's tools and key; it does not prove that a remote model account is configured.
 
-Provider setup pages are linked from every adapter. Formats were checked against [Codex](https://developers.openai.com/codex/mcp), [Anthropic](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector), [Antigravity](https://www.antigravity.google/docs/mcp), [OpenAI](https://developers.openai.com/api/docs/guides/tools-connectors-mcp), [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html), [Z.ai](https://docs.z.ai/guides/capabilities/mcp-call), and [xAI](https://docs.x.ai/developers/tools/remote-mcp) documentation on 2026-10-12.
+For automatic email scheduling, open **Inbox scheduling** and follow the [inbox guide](docs/inbox-agent.md). Start with **Run sample**: it exercises the agent workflow without sending email.
 
-## Connect your apps
+## Put it on your website
 
-Open **App connections** for Google Calendar, Outlook/Microsoft 365, CalDAV calendars, Gmail, and Notion. Calendar connections belong to each host. Gmail and Notion are workspace connections managed by administrators.
-
-### Google Calendar, Outlook, and CalDAV
-
-Use the calendar controls to connect accounts, choose which calendars block availability, and select the calendar that receives bookings. Google and Microsoft require configured OAuth applications. CalDAV supports iCloud, Fastmail, Nextcloud, and custom servers with app-specific credentials.
-
-### Gmail
-
-Configure Google OAuth in **Settings**, enable the Gmail API in Google Cloud, and register the exact Gmail callback URL shown in **App connections**. Connect Gmail and approve read and send access. The flow requests `gmail.readonly` and `gmail.send` plus account identity, uses PKCE and single-use state bound to the signed-in administrator, and stores the refresh token encrypted.
-
-Connected Gmail becomes the workspace sender for booking notifications and authentication emails. Calendar attachments are preserved. Disconnecting restores the SMTP/Resend sender configured under **Settings → Email**. A Gmail error is reported rather than silently switching the sending account. The email settings test still tests the SMTP/Resend configuration being edited.
-
-The Gmail **Check** button refreshes credentials and verifies account identity without sending email. Actual delivery and token refresh are covered by tests against a simulated Google API. Real-account authorization and mail delivery require your credentials and Google consent.
-
-### Notion
-
-Create a Notion internal integration with read, insert, and update content access. Share a parent page with it. Enter the integration token and parent page URL in **App connections**, then choose **Connect and create bookings database**. This creates a dedicated database under that page; it does not alter an existing database's schema.
-
-New bookings and changes queue background synchronization of meeting titles, guest names and emails, start/end times, booking status, and pending payment state. Retries update the same page using the stable OpenSlot booking ID. Page content and other properties added by users are preserved. Disconnection stops further sync and keeps existing Notion pages. A new connection has a new generation so old queued jobs cannot copy bookings into a different destination.
-
-Use **Sync existing bookings** to opt into copying booking history. The confirmation explains what will be copied. **Check** verifies access and required database properties. Delivery errors appear on the connection card. Requests are paced for Notion's standard 180-per-minute connection budget. Provider Retry-After responses defer jobs without blocking the worker or spending attempts on unsent requests. Tests simulate Notion creation, updates, cancellation, retry recovery, and disconnection; no real workspace is used in automated checks.
-
-App credentials are encrypted in the local database. Model-provider credentials remain in the external agent.
-
-## Embed on your website
-
-Open **Share & embed**, select a meeting, then copy the generated snippet. For a deployment at `https://schedule.example.com`:
+Open **Share & embed** and copy the generated snippet. For example:
 
 ```html
 <script src="https://schedule.example.com/embed.js" async></script>
 <openslot-booking slug="intro-call"></openslot-booking>
 ```
 
-Or use a popup:
+The embed needs no API key. Use a reachable HTTPS deployment when sharing with other people; localhost is only available on your own computer.
 
-```html
-<script src="https://schedule.example.com/embed.js" async></script>
-<button data-openslot-popup="intro-call">Find a time</button>
-```
+## Operations and validation
 
-The widget uses Shadow DOM to keep the booking interface separate from the host site's styles. Popup buttons also work when inserted after the script loads. Listen for the bubbling `openslot:booked` event to respond to a successful booking.
+- [Back up, restore, upgrade, or remove the service](docs/getting-started.md)
+- [Provider setup and public deployment](docs/configuration.md)
+- [Validation results and account-dependent checks](docs/validation.md)
+- [Remaining product gaps](docs/roadmap.md)
+- [Build from source and run tests](docs/development.md)
 
-The embed never needs an API key. Configure `EMBED_ALLOWED_ORIGINS` to restrict which browser origins can use the public booking API. These endpoints remain public; CORS is not authorization.
+## License and origin
 
-## Calendar sync, email, and deployment
-
-The local app can accept bookings without calendar or email credentials. It checks its own bookings and availability rules. External busy times require a connected calendar; confirmation emails require SMTP or Resend configuration.
-
-- **Calendars** connects calendar accounts. Configure Google OAuth under **Settings** first, or Microsoft credentials through the environment.
-- **Settings → Email** configures outgoing mail. A booking confirmation in the browser is not proof an email was delivered.
-- Set `BASE_URL` to the externally reachable HTTPS address when deploying. Set `BIND_HOST` for your network or proxy setup. Keep encryption keys stable.
-- Use `.env.example` and the inherited `docs/` references for provider configuration. These references retain upstream names and may describe advanced inherited features outside the main OpenSlot flow.
-- An optional separate `PUBLIC_BASE_URL` is inherited for public links. The simplified share UI currently assumes a single public/admin origin.
-
-The locally verified flows cover owner setup, booking creation and cancellation, cross-origin embeds, conflict handling, MCP authentication, API key revocation, and responsive themes. Live OAuth connections and email delivery require operator credentials and have not been verified against real accounts in this fork.
-
-## Development checks
-
-```sh
-cd frontend
-pnpm install --frozen-lockfile
-pnpm test:browsers
-cd ..
-make build
-make check
-```
-
-Browser binaries are installed into `frontend/.playwright` with cache cleanup disabled so other projects' browsers are untouched. Browser tests launch a temporary local server, use synthetic accounts and no real provider credentials, and remove their database afterward. Logs and screenshots go in ignored `artifacts/`.
-
-The backend is Go with SQLite. The admin UI is Svelte 5. The public booking pages and embed are framework-free. Internal Go imports, database identifiers, `CALNODE_*` environment variables, and legacy embed aliases remain compatible with the upstream foundation.
-
-### Inbox scheduling
-
-CC a dedicated Gmail mailbox to let your existing agent find available times and send an offer automatically. Codex, Claude Code and an external webhook worker share a request-scoped MCP workflow. Provider credentials stay in the agent. Configure it under **Inbox scheduling** and follow the [setup guide](docs/inbox-agent.md).
+Apache-2.0. OpenSlot is an independent modified fork of [Calnode](https://github.com/Calnode/calnode), whose contributors built the underlying scheduling platform. The license and notices are preserved. Run `openslot licenses` for bundled dependency notices. [Fork details](FORK.md).

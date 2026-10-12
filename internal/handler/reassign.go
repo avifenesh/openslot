@@ -28,13 +28,14 @@ func (h *Handler) ListUserUpcomingBookings(w http.ResponseWriter, r *http.Reques
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT b.id, b.start_at, b.end_at, et.name, et.slug,
+		SELECT b.id, b.start_at, b.end_at, et.name, et.slug, b.host_id = ?,
 		       COALESCE(a.name,''), COALESCE(a.email,'')
 		FROM bookings b
 		JOIN event_types et ON et.id = b.event_type_id
 		LEFT JOIN booking_attendees a ON a.booking_id = b.id AND a.is_organizer = 1
-		WHERE b.host_id = ? AND b.status != 'cancelled' AND b.end_at > ?
-		ORDER BY b.start_at ASC`, hostID, now)
+		WHERE (b.host_id = ? OR EXISTS (SELECT 1 FROM booking_hosts bh WHERE bh.booking_id = b.id AND bh.user_id = ?))
+		AND b.status != 'cancelled' AND b.end_at > ?
+		ORDER BY b.start_at ASC`, hostID, hostID, hostID, now)
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "list upcoming bookings: query", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "internal error")
@@ -48,13 +49,14 @@ func (h *Handler) ListUserUpcomingBookings(w http.ResponseWriter, r *http.Reques
 		EndAt         string `json:"end_at"`
 		EventTypeName string `json:"event_type_name"`
 		EventTypeSlug string `json:"event_type_slug"`
+		IsPrimary     bool   `json:"is_primary"`
 		AttendeeName  string `json:"attendee_name"`
 		AttendeeEmail string `json:"attendee_email"`
 	}
 	out := []row{}
 	for rows.Next() {
 		var x row
-		if err := rows.Scan(&x.ID, &x.StartAt, &x.EndAt, &x.EventTypeName, &x.EventTypeSlug,
+		if err := rows.Scan(&x.ID, &x.StartAt, &x.EndAt, &x.EventTypeName, &x.EventTypeSlug, &x.IsPrimary,
 			&x.AttendeeName, &x.AttendeeEmail); err != nil {
 			continue
 		}

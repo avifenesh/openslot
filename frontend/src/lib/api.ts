@@ -284,6 +284,7 @@ export type TeamMemberRef = {
 };
 
 export type UpcomingBooking = {
+ is_primary: boolean;
 	id: string;
 	start_at: string;
 	end_at: string;
