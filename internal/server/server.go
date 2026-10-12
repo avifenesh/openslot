@@ -255,6 +255,10 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 		logger.Info("LiveKit not configured — add a server in Settings → Video")
 	}
 
+	inboxDone := make(chan struct{})
+	go func() { defer close(inboxDone); h.RunInbox(ctx) }()
+	previousDrain := drain
+	drain = func() { previousDrain(); <-inboxDone }
 	return h, drain
 }
 
@@ -309,6 +313,7 @@ func New(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logge
 	})
 	// RequireBearerToken authenticates; MCPCallerMiddleware then binds the user+role so
 	// the tools scope by role (members → only their own bookings).
+	mux.Handle("/mcp/inbox", h.InboxMCPHandler())
 	mux.Handle("/mcp", mcpAuth(h.MCPCallerMiddleware(mcpHTTP)))
 
 	// OAuth 2.1 authorization server for MCP (discovery + dynamic client registration;
@@ -526,6 +531,11 @@ func New(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logge
 	mux.HandleFunc("POST /v1/email/inbound/resend", h.InboundEmailResend)
 
 	// API keys
+	mux.HandleFunc("GET /v1/inbox/requests/{id}", h.RequireAuth(h.InboxReceipt))
+	mux.HandleFunc("GET /v1/inbox", h.RequireAuth(h.InboxSettings))
+	mux.HandleFunc("PUT /v1/inbox", h.RequireAuth(h.SaveInboxSettings))
+	mux.HandleFunc("POST /v1/inbox/preview", h.RequireAuth(h.PreviewInbox))
+	mux.HandleFunc("POST /v1/inbox/claim", h.RequireAuth(h.ClaimInbox))
 	mux.HandleFunc("GET /v1/apps", h.RequireAuth(h.AppConnections))
 	mux.HandleFunc("GET /v1/apps/gmail/connect", h.RequireAuth(h.ConnectGmail))
 	mux.HandleFunc("GET /v1/apps/gmail/callback", h.RequireAuth(h.GmailCallback))

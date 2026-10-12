@@ -22,6 +22,7 @@ import (
 )
 
 type Config struct {
+	InboxAccess  bool   `json:"inbox_access"`
 	Email        string `json:"email,omitempty"`
 	Name         string `json:"name,omitempty"`
 	DatabaseID   string `json:"database_id,omitempty"`
@@ -185,11 +186,11 @@ func (s *Service) request(ctx context.Context, client *http.Client, method, url,
 		}
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("provider returned HTTP %d; check credentials and permissions", res.StatusCode)
+		return providerHTTPError(res.StatusCode)
 	}
 	if out != nil {
 		if err = json.NewDecoder(io.LimitReader(res.Body, 2<<20)).Decode(out); err != nil {
-			return errors.New("provider returned an invalid response")
+			return errInvalidResponse
 		}
 	}
 	return nil
@@ -231,3 +232,11 @@ func (e providerRetry) Error() string {
 }
 func (e providerRetry) RetryAt() time.Time     { return e.at }
 func (e providerRetry) RequestAttempted() bool { return e.attempted }
+
+var errInvalidResponse = errors.New("provider returned an invalid or oversized response")
+
+type providerHTTPError int
+
+func (e providerHTTPError) Error() string {
+	return fmt.Sprintf("provider returned HTTP %d; check credentials and permissions", int(e))
+}

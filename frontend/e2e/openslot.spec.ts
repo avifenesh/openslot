@@ -41,9 +41,9 @@ async function api(request: APIRequestContext, path: string, method = 'GET', bod
 	return response.status() === 204 ? null : response.json();
 }
 
-async function mcp(request: APIRequestContext, name: string, args: Record<string, unknown> = {}) {
-	const response = await request.post(base + '/mcp', {
-		headers: { Authorization: `Bearer ${agentKey}`, 'MCP-Protocol-Version': '2026-07-28', 'Mcp-Method': 'tools/call', 'Mcp-Name': name, Accept: 'application/json, text/event-stream' },
+async function mcp(request: APIRequestContext, name: string, args: Record<string, unknown> = {}, task?: { token: string; error?: string }) {
+	const response = await request.post(base + (task ? '/mcp/inbox' : '/mcp'), {
+		headers: { Authorization: `Bearer ${task?.token ?? agentKey}`, 'MCP-Protocol-Version': '2026-07-28', 'Mcp-Method': 'tools/call', 'Mcp-Name': name, Accept: 'application/json, text/event-stream' },
 		data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args, _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': {}, 'io.modelcontextprotocol/clientInfo': {name:'openslot-e2e',version:'1.0.0'} } } },
 	});
 	expect(response.status(), await response.text()).toBe(200);
@@ -53,6 +53,11 @@ async function mcp(request: APIRequestContext, name: string, args: Record<string
 		: JSON.parse(wire);
 	expect(result, 'MCP returned a response to the request').toBeDefined();
 	expect(result.error).toBeUndefined();
+	if (task?.error) {
+		expect(result.result.isError).toBe(true);
+		expect(result.result.content.map((part: { text?: string }) => part.text ?? '').join('\n')).toContain(task.error);
+		return;
+	}
 	expect(result.result.isError, JSON.stringify(result.result.content)).not.toBe(true);
 	return result.result.structuredContent ?? JSON.parse(result.result.content.find((part: {type:string}) => part.type === 'text').text);
 }
@@ -75,7 +80,7 @@ test.beforeAll(async () => {
 		cwd: dataDirectory,
 		stdio: ['ignore', serverLog, serverLog],
 		// Deliberately exclude any real calendar, mail or model credentials from tests.
-		env: { PATH: process.env.PATH, HOME: homedir(), PORT: String(port), BIND_HOST: '127.0.0.1', BASE_URL: base, DATABASE_URL: `sqlite://${join(dataDirectory, 'test.db')}`, DATA_DIR: join(dataDirectory, 'uploads'), CALNODE_ENCRYPTION_KEY: randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET: randomBytes(32).toString('hex'), LOG_LEVEL: 'error' },
+		env: { PATH: process.env.PATH, HOME: homedir(), GOMAXPROCS: '3', PORT: String(port), BIND_HOST: '127.0.0.1', BASE_URL: base, DATABASE_URL: `sqlite://${join(dataDirectory, 'test.db')}`, DATA_DIR: join(dataDirectory, 'uploads'), CALNODE_ENCRYPTION_KEY: randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET: randomBytes(32).toString('hex'), LOG_LEVEL: 'error' },
 	});
 	await expect.poll(async () => {
 		if (child.exitCode !== null) throw new Error(`Test server exited: ${child.exitCode}`);
@@ -215,6 +220,118 @@ test('a guest books cross-origin, an agent manages the same booking, and conflic
 		await shot(guestPage, 'public-booking-mobile');
 		expect(await guestPage.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 	} finally { await guest.close(); }
+});
+
+test('paused inbox configuration, runtime commands and a task-scoped synthetic slot offer', async ({ page, request }) => {
+	const consoleErrors: string[] = [];
+	page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.goto(base + '/admin/inbox');
+	await expect(page.getByRole('heading', { name: 'Turn an email into a meeting.' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Manage Gmail' })).toHaveAttribute('href', '/admin/apps');
+	const listening = page.getByRole('switch', { name: 'Send available slots automatically' });
+	await expect(listening).toBeDisabled();
+	await expect(listening).not.toBeChecked();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeDisabled();
+	await page.getByLabel('Dedicated email address').fill('scheduling@example.test');
+	await page.getByLabel('Meeting type', { exact: true }).click();
+	await page.getByRole('option', { name: 'Intro call', exact: true }).click();
+	await page.getByLabel('Timezone for offered times').fill('UTC');
+	await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+	await expect(page.getByText('Settings saved. Inbox scheduling is paused.', { exact: true })).toBeVisible();
+	await page.reload();
+	await expect(page.getByLabel('Dedicated email address')).toHaveValue('scheduling@example.test');
+	await expect(page.getByLabel('Meeting type', { exact: true })).toHaveText('Intro call');
+	await expect(page.getByLabel('Timezone for offered times')).toHaveValue('UTC');
+	const saved = await api(page.request, '/v1/inbox');
+	expect(saved.settings).toMatchObject({ enabled: false, address: 'scheduling@example.test', event_slug: 'intro-call', timezone: 'UTC' });
+	const apps = await api(page.request, '/v1/apps');
+	expect(apps.items.find((app: { provider: string }) => app.provider === 'gmail').connected).toBe(false);
+
+	for (const [label, engine] of [['Codex', 'codex'], ['Claude Code', 'claude'], ['External webhook', 'webhook']] as const) {
+		await page.getByRole('button', { name: label, exact: true }).click();
+		const suffix = engine === 'webhook' ? " --webhook-url 'https://your-agent.example/inbox'" : '';
+		await expect(page.locator('.embed-code')).toHaveText(`./openslot agent --url '${base}' --engine ${engine}${suffix}`);
+	}
+	await page.getByRole('button', { name: 'Run sample', exact: true }).click();
+	const activity = page.locator('.inbox-activity-list article');
+	await expect(activity).toHaveCount(1);
+	await expect(activity).toContainText('Sample conversation');
+	await expect(activity.locator('.soft-badge')).toHaveText('pending');
+	await expect(activity).toContainText('Waiting for an agent worker.');
+
+	// This request context has no owner cookies. The worker uses a workspace key
+	// to claim, then only the temporary task token for the four-tool inbox MCP.
+	const workerHeaders = { Authorization: `Bearer ${agentKey}` };
+	const claimResponse = await request.post(base + '/v1/inbox/claim', { headers: workerHeaders, data: { engine: 'webhook' } });
+	expect(claimResponse.status()).toBe(200);
+	const task = await claimResponse.json();
+	expect(task.mcp_url).toBe(base + '/mcp/inbox');
+	expect(task.token).toMatch(/^[a-f0-9]{64}$/);
+	const receipt = async () => {
+		const response = await request.get(base + `/v1/inbox/requests/${task.id}`, { headers: workerHeaders });
+		expect(response.status()).toBe(200);
+		return response.json();
+	};
+	expect(await receipt()).toEqual({ status: 'processing' });
+	const email = await mcp(request, 'read_email_request', {}, task);
+	expect(email).toMatchObject({ preview: true, meeting_type: 'intro-call', timezone: 'UTC', email: { from: 'sample@example.invalid' } });
+	expect(email.email.body).toContain('synthetic test');
+	const from = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+	const to = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+	const available = await mcp(request, 'find_email_slots', { from, to }, task);
+	expect(available.timezone).toBe('UTC');
+	expect(available.slots.length).toBeGreaterThanOrEqual(3);
+	await mcp(request, 'send_slot_offer', { starts: ['not-a-timestamp'] }, { token: task.token, error: 'invalid slot timestamp' });
+	// A syntactically valid time outside the fixture's 09:00-17:00 availability
+	// must fail too, without completing or sending the request.
+	await mcp(request, 'send_slot_offer', { starts: [`${from}T03:17:00Z`] }, { token: task.token, error: 'a selected slot is no longer available' });
+	expect(await receipt()).toEqual({ status: 'processing' });
+	const bookingsBefore = await api(page.request, '/v1/bookings');
+	const starts = available.slots.slice(0, 3).map((slot: { start: string }) => slot.start);
+	const offered = await mcp(request, 'send_slot_offer', { starts }, task);
+	expect(offered.result).toContain('Here are available times for your meeting (UTC)');
+	expect(offered.result).toContain(base + '/book/intro-call');
+	expect(offered.result.split('\n').filter((line: string) => line.startsWith('- '))).toHaveLength(3);
+	expect(await receipt()).toEqual({ status: 'previewed' });
+	expect(await api(page.request, '/v1/bookings')).toEqual(bookingsBefore);
+	const replay = await request.post(task.mcp_url, { headers: { Authorization: `Bearer ${task.token}` }, data: { jsonrpc: '2.0', id: 1, method: 'tools/list' } });
+	expect(replay.status()).toBe(401);
+	const empty = await request.post(base + '/v1/inbox/claim', { headers: workerHeaders, data: { engine: 'webhook' } });
+	expect(empty.status()).toBe(204);
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(activity.locator('.soft-badge')).toHaveText('previewed');
+	await expect(activity.locator('.inbox-result')).toHaveText(offered.result);
+	await expect(page.getByRole('switch', { name: 'Send available slots automatically' })).not.toBeChecked();
+	await writeFile(resolve('../artifacts/inbox-preview-receipt.json'), JSON.stringify({
+		id: task.id, status: (await receipt()).status, preview: email.preview,
+		meeting_type: email.meeting_type, timezone: email.timezone,
+		offered_starts: starts, result: offered.result,
+		invalid_timestamp_rejected: true, fabricated_time_rejected: true,
+		bookings_unchanged: true, consumed_token_status: replay.status(),
+	}, null, 2));
+	// Let the sample confirmation disappear before capturing the form beneath it.
+	await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+
+	for (const [name, width, height, dark] of [
+		['inbox-desktop-light', 1440, 1000, false],
+		['inbox-desktop-dark', 1440, 1000, true],
+		['inbox-mobile-dark', 390, 844, true],
+		['inbox-mobile-light', 390, 844, false],
+	] as const) {
+		await page.setViewportSize({ width, height });
+		if (await page.locator('html').evaluate(html => html.classList.contains('dark')) !== dark) {
+			if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
+			await page.getByRole('button', { name: dark ? 'Use dark theme' : 'Use light theme' }).click();
+			if (width === 390) await page.keyboard.press('Escape');
+		}
+		await expect(page.locator('html')).toHaveClass(dark ? /dark/ : /^(?!.*\bdark\b)/);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth), name).toBeLessThanOrEqual(width);
+		await shot(page, name);
+	}
+	expect(consoleErrors).toEqual([]);
+	expect(errors).toEqual([]);
+	expect(externalRequests).toEqual([]);
 });
 
 test('responsive views, dark theme, revocation and no client exceptions', async ({ page }) => {
