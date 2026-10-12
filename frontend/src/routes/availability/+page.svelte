@@ -220,7 +220,7 @@
 		if (ovForm.reason === 'custom_hours' && ovForm.start_time >= ovForm.end_time) {
 			ovAddError = 'End time must be after start time.'; return;
 		}
-		if (ovForm.end_date && ovForm.end_date < ovForm.date) {
+		if (ovForm.reason !== 'custom_hours' && ovForm.end_date && ovForm.end_date < ovForm.date) {
 			ovAddError = 'End date must be on or after the start date.'; return;
 		}
 		addingOv = true;
@@ -419,7 +419,7 @@
 		{#if overridesLoading}
 			<p class="px-4 py-4 text-sm text-muted-foreground">Loading…</p>
 		{:else if overrides.length > 0}
-			<table class="w-full text-sm">
+			<table class="override-table w-full text-sm">
 				<thead>
 					<tr class="border-b">
 						<th class="px-4 pb-3 pt-3 text-left text-xs font-medium text-muted-foreground">Date</th>
@@ -445,7 +445,7 @@
 									<Tooltip.Provider>
 										<div class="flex items-center justify-end gap-1">
 											<Tooltip.Root>
-												<Tooltip.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })} onclick={() => deleteGroup(entry.group_id)}>
+												<Tooltip.Trigger aria-label={`Delete override from ${fmtDate(entry.start, $prefs)} to ${fmtDate(entry.end, $prefs)}`} class={buttonVariants({ variant: 'ghost', size: 'icon' })} onclick={() => deleteGroup(entry.group_id)}>
 													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
 												</Tooltip.Trigger>
 												<Tooltip.Content>Delete span</Tooltip.Content>
@@ -478,6 +478,7 @@
 											<Tooltip.Root>
 												<Tooltip.Trigger
 													class={buttonVariants({ variant: 'ghost', size: 'icon' })}
+													aria-label={`Delete override for ${fmtDate(ov.date, $prefs)}`}
 													onclick={() => deleteOverride(ov.id)}
 												>
 													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -497,23 +498,23 @@
 		{/if}
 
 		<!-- Add override form -->
-		<div class="border-t px-4 py-4">
+		<form class="border-t px-4 py-4" aria-label="Add date override" onsubmit={(event) => { event.preventDefault(); void addOverride(); }}>
 			{#if ovAddError}<p class="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{ovAddError}</p>{/if}
-			<div class="flex flex-wrap items-end gap-3">
+			<div class={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${ovForm.reason === 'custom_hours' ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
 				<div class="space-y-1.5">
-					<label for="ov-date" class="text-sm font-medium">Date</label>
-					<DatePicker bind:value={ovForm.date} placeholder="Pick a date" />
+					<label for="ov-date" class="block text-sm font-medium">Date</label>
+					<DatePicker id="ov-date" bind:value={ovForm.date} placeholder="Pick a date" class="w-full" />
 				</div>
 				{#if ovForm.reason !== 'custom_hours'}
 					<div class="space-y-1.5">
-						<label for="ov-end-date" class="text-sm font-medium">To <span class="font-normal text-muted-foreground">(optional)</span></label>
-						<DatePicker bind:value={ovForm.end_date} placeholder="Same day" />
+						<label for="ov-end-date" class="block text-sm font-medium">To <span class="font-normal text-muted-foreground">(optional)</span></label>
+						<DatePicker id="ov-end-date" bind:value={ovForm.end_date} placeholder="Same day" class="w-full" />
 					</div>
 				{/if}
 				<div class="space-y-1.5">
-					<label for="ov-type" class="text-sm font-medium">Type</label>
+					<label for="ov-type" class="block text-sm font-medium">Type</label>
 					<Select.Root type="single" value={ovForm.reason} onValueChange={(v) => { if (v) ovForm.reason = v as OverrideReason; }}>
-						<Select.Trigger id="ov-type" class="w-fit">{REASON_LABELS[ovForm.reason]}</Select.Trigger>
+						<Select.Trigger id="ov-type" class="w-full">{REASON_LABELS[ovForm.reason]}</Select.Trigger>
 						<Select.Content>
 							{#each REASON_OPTIONS as r}
 								<Select.Item value={r.value} label={r.label}>{r.label}</Select.Item>
@@ -523,31 +524,43 @@
 				</div>
 				{#if ovForm.reason === 'custom_hours'}
 					<div class="space-y-1.5">
-						<label for="ov-start" class="text-sm font-medium">From</label>
+						<label for="ov-start" class="block text-sm font-medium">From</label>
 						<Select.Root type="single" bind:value={ovForm.start_time}>
-							<Select.Trigger id="ov-start" class="w-fit">{timeLabel(ovForm.start_time)}</Select.Trigger>
+							<Select.Trigger id="ov-start" class="w-full">{timeLabel(ovForm.start_time)}</Select.Trigger>
 							<Select.Content>
 								{#each timeOptions as t}<Select.Item value={t.value} label={t.label}>{t.label}</Select.Item>{/each}
 							</Select.Content>
 						</Select.Root>
 					</div>
 					<div class="space-y-1.5">
-						<label for="ov-end" class="text-sm font-medium">To</label>
+						<label for="ov-end" class="block text-sm font-medium">To</label>
 						<Select.Root type="single" bind:value={ovForm.end_time}>
-							<Select.Trigger id="ov-end" class="w-fit">{timeLabel(ovForm.end_time)}</Select.Trigger>
+							<Select.Trigger id="ov-end" class="w-full">{timeLabel(ovForm.end_time)}</Select.Trigger>
 							<Select.Content>
 								{#each timeOptions as t}<Select.Item value={t.value} label={t.label}>{t.label}</Select.Item>{/each}
 							</Select.Content>
 						</Select.Root>
 					</div>
 				{/if}
-				<Button onclick={addOverride} disabled={addingOv}>
-					{addingOv ? 'Adding…' : 'Add override'}
-				</Button>
+
 				{#if ovForm.reason === 'custom_hours'}
-					<p class="w-full text-xs text-muted-foreground">Split day? Add one block, then add another on the same date.</p>
+					<p class="col-span-full text-sm text-muted-foreground">Split day? Add one block, then add another on the same date.</p>
 				{/if}
 			</div>
-		</div>
+			<Button type="submit" class="mt-4 w-full sm:w-auto" disabled={addingOv}>
+				{addingOv ? 'Adding…' : 'Add override'}
+			</Button>
+		</form>
 	</div>
 </div>
+
+<style>
+ @media (max-width: 639px) {
+  .override-table { display: block; }
+  .override-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .override-table tbody { display: block; }
+  .override-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 16px; }
+  .override-table td { padding: 0; grid-column: 1; overflow-wrap: anywhere; }
+  .override-table td:last-child { grid-column: 2; grid-row: 1 / 4; align-self: center; }
+ }
+</style>

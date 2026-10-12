@@ -113,6 +113,7 @@
 
 	onMount(() => {
 		justConnected = $page.url.searchParams.get('connected') === 'true';
+		caldavOpen = $page.url.searchParams.get('provider') === 'caldav';
 		zoomJustConnected = $page.url.searchParams.get('zoom') === 'connected';
 		load();
 		loadZoom();

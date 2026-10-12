@@ -456,7 +456,7 @@ a.panel-footer { color: var(--primary); }
  .connector-actions { flex-wrap: wrap; }
  .connector-detail .snippet-header { gap: 10px; flex-wrap: wrap; }
 }
-.app-connector-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; align-items: start; }
+.app-connector-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; align-items: stretch; }
 .app-connector-card { padding: 25px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .app-connector-heading { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
 .app-connector-card > p { color: var(--muted-foreground); font-size: 14px; line-height: 1.7; }
