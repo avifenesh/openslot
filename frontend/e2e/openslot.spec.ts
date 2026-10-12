@@ -398,6 +398,102 @@ async function controlsHitTarget(locator: ReturnType<Page['locator']>) {
 	}), { message: `Hit target for ${await locator.getAttribute('aria-label') ?? await locator.textContent()}` }).toBe(true);
 }
 
+test('Google manual application type persists and reset requires confirmation in both themes', async ({ page }) => {
+	const browserErrors: string[] = [];
+	page.on('console', message => { if (message.type() === 'error') browserErrors.push(message.text()); });
+	const settingsPath = '/v1/settings/google';
+	const clientID = 'synthetic-manual.apps.googleusercontent.com';
+	const database = join(dataDirectory, 'test.db');
+	const sql = (script: string) => execFileSync('python3', ['-c', `import sqlite3,sys,json\ndb=sqlite3.connect(sys.argv[1])\n${script}`, database], { encoding: 'utf8' });
+	const storedType = () => sql('print(db.execute("SELECT google_client_type FROM server_settings WHERE id=1").fetchone()[0])').trim();
+	const snapshot = () => JSON.parse(sql('print(json.dumps({table:db.execute("SELECT * FROM "+table+" ORDER BY 1").fetchall() for table in ["server_settings","calendar_connections","connection_calendars","app_integrations","google_oauth_states","app_oauth_states"]}))'));
+	try {
+		await api(page.request, settingsPath, 'PATCH', { client_id: clientID, client_secret: 'synthetic-manual-secret', client_type: 'desktop' });
+		await page.goto(base + '/admin/settings/google');
+		await expect(page.getByLabel('Google OAuth client JSON', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Enter credentials manually', exact: true }).click();
+		await expect(page.getByLabel('Application type', { exact: true })).toHaveText('Desktop app');
+		for (const [label, type] of [['Web application', 'web'], ['Desktop app', 'desktop'], ['Web application', 'web']] as const) {
+			await page.getByLabel('Application type', { exact: true }).click();
+			await page.getByRole('option', { name: label, exact: true }).click();
+			const saved = page.waitForResponse(response => response.url() === base + settingsPath && response.request().method() === 'PATCH');
+			await page.getByRole('button', { name: 'Save', exact: true }).click();
+			expect((await saved).status()).toBe(200);
+			expect(await api(page.request, settingsPath)).toMatchObject({ client_id: clientID, client_type: type, configured: true, client_secret_set: true });
+			expect(storedType()).toBe(type);
+			await page.reload();
+			await page.getByRole('button', { name: 'Enter credentials manually', exact: true }).click();
+			await expect(page.getByLabel('Application type', { exact: true })).toHaveText(label);
+			await expect(page.getByLabel('Client Secret', { exact: true })).toHaveValue('');
+		}
+		// Only seed the disposable fixture DB. Tokens are inert synthetic strings.
+		sql(`db.executescript("""
+INSERT INTO users(id,name,email,iana_timezone,archived_at) VALUES('reset-departed','Departed','reset-departed@example.test','UTC',datetime('now'));
+INSERT INTO calendar_connections(id,user_id,provider,access_token_enc,calendar_id,is_destination) VALUES('reset-google','reset-departed','google','synthetic','primary',1),('reset-microsoft','reset-departed','microsoft','synthetic','primary',0);
+INSERT INTO connection_calendars(id,user_id,provider,calendar_id) VALUES('reset-google-choice','reset-departed','google','primary'),('reset-microsoft-choice','reset-departed','microsoft','primary');
+INSERT INTO app_integrations(provider,generation,credentials_enc,config,connected_by,connected_at) VALUES('gmail','reset-fixture','synthetic','{}','reset-departed',datetime('now'));
+INSERT INTO google_oauth_states(state_hash,purpose,user_id,verifier,expires_at) VALUES('reset-calendar','calendar','reset-departed','synthetic','2099-01-01T00:00:00Z');
+INSERT INTO app_oauth_states(state_hash,user_id,verifier,expires_at) VALUES('reset-gmail','reset-departed','synthetic','2099-01-01T00:00:00Z');
+""")\ndb.commit()`);
+		const before = snapshot();
+		let resetRequests = 0;
+		page.on('request', request => { if (request.url() === base + settingsPath + '/reset-connections') resetRequests++; });
+		for (const [device, width, height] of [['desktop', 1023, 991], ['mobile', 390, 844]] as const) {
+			await page.setViewportSize({ width, height });
+			for (const theme of ['light', 'dark'] as const) {
+				await controlsTheme(page, theme, device === 'mobile');
+				await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /^(?!.*\bdark\b)/);
+				await expect(page.getByLabel('Application type', { exact: true })).toHaveText('Web application');
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+				await shot(page, `google-manual-${device}-${theme}`);
+				// Blank the synthetic ID so its mask cannot obscure the floating options.
+				await page.getByLabel('Client ID', { exact: true }).fill('');
+				await page.getByLabel('Application type', { exact: true }).click();
+				await expect(page.getByRole('option', { name: 'Desktop app', exact: true })).toBeEnabled();
+				await expect(page.getByRole('option', { name: 'Desktop app', exact: true })).toBeVisible();
+				await page.screenshot({ path: join(screenshots, `google-type-selector-${device}-${theme}.png`), fullPage: true, animations: 'disabled', mask: [page.getByLabel('Client Secret', { exact: true })] });
+				await page.keyboard.press('Escape');
+				await page.getByLabel('Client ID', { exact: true }).fill(clientID);
+				await page.getByRole('button', { name: 'Reset Google connections', exact: true }).click();
+				const dialog = page.getByRole('alertdialog', { name: 'Reset Google connections?', exact: true });
+				await expect(dialog).toBeVisible();
+				await expect(dialog).toContainText('including archived members');
+				await expect(dialog).toContainText('Your saved app credentials stay in place.');
+				const box = await dialog.boundingBox();
+				expect(box).not.toBeNull();
+				expect(box!.x).toBeGreaterThanOrEqual(0);
+				expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+				await page.screenshot({ path: join(screenshots, `google-reset-${device}-${theme}.png`), animations: 'disabled', mask: [page.locator('[data-sensitive]')] });
+				await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+				await expect(dialog).toBeHidden();
+				expect(resetRequests).toBe(0);
+				expect(snapshot()).toEqual(before);
+			}
+		}
+		await page.getByRole('button', { name: 'Reset Google connections', exact: true }).click();
+		const reset = page.waitForResponse(response => response.url() === base + settingsPath + '/reset-connections');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset connections', exact: true }).click();
+		expect((await reset).status()).toBe(200);
+		await expect(page.getByText('Google accounts disconnected. You can now replace this app and reconnect.', { exact: true })).toBeVisible();
+		expect(resetRequests).toBe(1);
+		const after = snapshot();
+		expect(after.server_settings).toEqual(before.server_settings);
+		expect(after.calendar_connections).toHaveLength(1);
+		expect(after.calendar_connections[0][0]).toBe('reset-microsoft');
+		expect(after.connection_calendars).toEqual(before.connection_calendars.filter((row: string[]) => row[0] === 'reset-microsoft-choice'));
+		expect(after.app_integrations).toEqual(before.app_integrations.filter((row: string[]) => row[0] !== 'gmail'));
+		expect(after.google_oauth_states).toEqual([]);
+		expect(after.app_oauth_states).toEqual([]);
+		expect(browserErrors).toEqual([]);
+		expect(errors).toEqual([]);
+		expect(externalRequests).toEqual([]);
+	} finally {
+		await api(page.request, settingsPath + '/reset-connections', 'POST');
+		await api(page.request, settingsPath, 'PATCH', { client_id: '' });
+		sql('db.execute("DELETE FROM calendar_connections WHERE id LIKE \'reset-%\'")\ndb.execute("DELETE FROM connection_calendars WHERE id LIKE \'reset-%\'")\ndb.execute("DELETE FROM users WHERE id=\'reset-departed\'")\ndb.commit()');
+	}
+});
+
 test('reported app cards open local setup in both themes and viewport sizes', async ({ page }) => {
 	const browserErrors: string[] = [];
 	page.on('console', message => { if (message.type() === 'error') browserErrors.push(message.text()); });
@@ -425,6 +521,8 @@ test('reported app cards open local setup in both themes and viewport sizes', as
 			await controlsHitTarget(gmail);
 			await gmail.click();
 			await expect(page).toHaveURL(base + '/admin/settings/google');
+			await expect(page.getByLabel('Google OAuth client JSON', { exact: true })).toBeVisible();
+			await page.getByRole('button', { name: 'Enter credentials manually', exact: true }).click();
 			await expect(page.getByLabel('Client ID', { exact: true })).toBeVisible();
 			await expect(page.getByLabel('Client Secret', { exact: true })).toHaveAttribute('type', 'password');
 			await shot(page, `reported-gmail-${device}-${theme}`);

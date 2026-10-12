@@ -142,11 +142,15 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 	// DB Google settings take priority over env vars.
 	googleClientID := cfg.GoogleClientID
 	googleClientSecret := cfg.GoogleClientSecret
+	googleClientType := "web"
+	desktopAllowed := googleoauth.DesktopAllowed(cfg.BaseURL, cfg.BindHost, cfg.Port)
+	h.SetGoogleDesktopAllowed(desktopAllowed)
 	if dbGoogle, dbGoogleErr := handler.LoadGoogleSettingsFromDB(db, encKey); dbGoogleErr != nil {
 		logger.Warn("google settings: could not load from database", "error", dbGoogleErr)
 	} else if dbGoogle != nil {
 		googleClientID = dbGoogle.ClientID
 		googleClientSecret = dbGoogle.ClientSecret
+		googleClientType = dbGoogle.ClientType
 		logger.Info("Google OAuth: credentials loaded from database")
 	}
 
@@ -154,9 +158,13 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 	calSvc := calendar.NewService(db)
 	calRedirect := cfg.BaseURL + "/v1/calendar/callback"
 
-	if problem := googleoauth.Problem(googleClientID, googleClientSecret != ""); problem == "" {
+	problem := googleoauth.Problem(googleClientID, googleClientSecret != "")
+	if googleClientType == "desktop" && !desktopAllowed {
+		problem = "Desktop OAuth requires a local loopback listener; use a Web application client for hosted servers"
+	}
+	if problem == "" {
 		authRedirect := cfg.BaseURL + "/v1/auth/callback"
-		h.SetGoogleAuth(googleClientID, googleClientSecret, authRedirect, cfg.CookieSecure)
+		h.SetGoogleAuthType(googleClientID, googleClientSecret, authRedirect, cfg.CookieSecure, googleClientType)
 		logger.Info("Google OAuth login configured", "redirect_url", authRedirect)
 
 		gc, err := gcal.New(db, googleClientID, googleClientSecret, calRedirect, cfg.EncryptionKey)
@@ -378,6 +386,7 @@ func New(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logge
 	mux.HandleFunc("POST /v1/settings/email/rsvp-webhook", settingsRL(h.RequireAuth(h.SetupRSVPWebhook)))
 	mux.HandleFunc("GET /v1/settings/google", h.RequireAuth(h.GetGoogleSettings))
 	mux.HandleFunc("PATCH /v1/settings/google", settingsRL(h.RequireAuth(h.PatchGoogleSettings)))
+	mux.HandleFunc("POST /v1/settings/google/reset-connections", settingsRL(h.RequireAuth(h.ResetGoogleConnections)))
 	mux.HandleFunc("GET /v1/settings/zoom", h.RequireAuth(h.GetZoomSettings))
 	mux.HandleFunc("PATCH /v1/settings/zoom", settingsRL(h.RequireAuth(h.PatchZoomSettings)))
 	mux.HandleFunc("GET /v1/settings/livekit", h.RequireAuth(h.GetLiveKitSettings))

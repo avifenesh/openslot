@@ -699,6 +699,11 @@ test('Google OAuth Apps and Settings links open isolated Google login with the c
   expect(target.searchParams.get('redirect_uri')).toBe(identityOrigin+callback);
   expect(target.searchParams.get('response_type')).toBe('code');
   expect(target.searchParams.get('state')).toBeTruthy();
+  if(!gmail) {
+   expect(target.searchParams.get('code_challenge_method')).toBe('S256');
+   expect(target.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+   expect(navigations.at(-1)?.scopes).toContain('https://www.googleapis.com/auth/calendar');
+  }
   if(gmail)expect(navigations.at(-1)?.scopes).toEqual(expect.arrayContaining(['https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/gmail.send']));
  };
  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
@@ -709,11 +714,13 @@ test('Google OAuth Apps and Settings links open isolated Google login with the c
    await expect(setup).toHaveAttribute('href','/admin/settings/google');
    await setup.click();
    await expect(page).toHaveURL(base+'/admin/settings/google');
-   await expect(page.getByLabel('Client ID',{exact:true})).toBeVisible();
+   await expect(page.getByLabel('Google OAuth client JSON',{exact:true})).toBeVisible();
+   await expect(page.getByLabel('Client ID',{exact:true})).toHaveCount(0);
    await page.goto(base+'/admin/apps');
   }
   await page.goto(base+'/admin/settings/google');
-  const form = page.locator('div').filter({has:page.getByRole('heading',{name:'Google OAuth',exact:true})}).filter({has:page.getByLabel('Client ID',{exact:true})}).last();
+  await page.getByRole('button',{name:'Enter credentials manually',exact:true}).click();
+  const form = page.locator('div.rounded-lg').filter({has:page.getByRole('heading',{name:'2. Import your Google app',exact:true})});
   await form.getByLabel('Client ID',{exact:true}).fill(clientID);
   await form.getByLabel('Client Secret',{exact:true}).fill('synthetic-secret-never-sent-to-google');
   const savedResponse = page.waitForResponse(r=>r.url()===base+'/v1/settings/google'&&r.request().method()==='PATCH');
@@ -797,4 +804,164 @@ test('Google OAuth startup rejects malformed saved and environment credentials',
   await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
   await restart();
  }
+});
+
+
+test('Google OAuth imports self-owned Desktop and Web JSON without exposing secrets and preserves PKCE across restart', async ({page}) => {
+ await restartOAuthFixture(page);
+ const settings = '/v1/settings/google';
+ const initialErrors = runtimeErrors.length;
+ const initialBlocked = blockedRequests.length;
+ await api(page.request,settings,'PATCH',{client_id:''});
+ const imported = {client_id:'synthetic-desktop.apps.googleusercontent.com',client_secret:'synthetic-import-only-secret'};
+ const readStored = () => JSON.parse(execFileSync('python3',['-c','import sqlite3,sys,json; db=sqlite3.connect(sys.argv[1]); print(json.dumps(db.execute("SELECT google_client_id,google_client_secret_enc,google_client_type FROM server_settings WHERE id=1").fetchone()))',join(directory,'test.db')],{encoding:'utf8'})) as string[];
+ const upload = async (contents:string) => page.getByLabel('Google OAuth client JSON',{exact:true}).setInputFiles({name:'synthetic-google-client.json',mimeType:'application/json',buffer:Buffer.from(contents)});
+ try {
+  const capability = await api(page.request,settings);
+  expect(capability).toMatchObject({desktop_allowed:true,base_url:identityOrigin});
+  expect(new URL(identityOrigin).port).toBe(new URL(base).port);
+  await page.goto(base+'/admin/settings/google');
+  await expect(page.getByLabel('Google OAuth client JSON',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Client Secret',{exact:true})).toHaveCount(0);
+  for(const width of [1023,390]) {
+   await page.setViewportSize({width,height:991});
+   for(const value of ['light','dark'] as const) {
+    await theme(page,value,width===390);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({path:join(artifacts,`oauth-create-app-${width}-${value}.png`),fullPage:true,animations:'disabled',mask:[page.locator('[data-sensitive]'),page.getByLabel('Google OAuth client JSON',{exact:true})]});
+   }
+  }
+  const original = readStored();
+  let saves = 0;
+  page.on('request',r=>{if(r.url()===base+settings&&r.method()==='PATCH')saves++;});
+  for(const invalid of [
+   {file:'{broken',message:'Choose the JSON client file downloaded from Google Cloud.'},
+   {file:JSON.stringify({type:'service_account',private_key:'synthetic-not-a-key',client_email:'fixture@example.test'}),message:'Choose a Google Web or Desktop OAuth client file.'},
+   {file:JSON.stringify({installed:{client_id:imported.client_id}}),message:'Download the complete Google client JSON file'},
+  ]) {
+   await upload(invalid.file);
+   await expect(page.locator('[data-sonner-toast]').filter({hasText:invalid.message})).toBeVisible();
+   expect(JSON.stringify(readStored())===JSON.stringify(original),'rejected files preserve the stored configuration').toBe(true);
+  }
+  expect(saves).toBe(0);
+  const saved = page.waitForResponse(r=>r.url()===base+settings&&r.request().method()==='PATCH');
+  await upload(JSON.stringify({installed:imported}));
+  expect((await saved).status()).toBe(200);
+  await expect(page.getByText('Credentials saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Authorised redirect URIs',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('Client Secret',{exact:true})).toHaveCount(0);
+  const stored = readStored();
+  expect(stored[0]).toBe(imported.client_id);
+  expect(stored[2]).toBe('desktop');
+  expect(!!stored[1]&&!stored[1].includes(imported.client_secret),'only ciphertext is stored').toBe(true);
+  const {readFile} = await import('node:fs/promises');
+  const env = (await readFile(`/proc/${child.pid}/environ`,'utf8')).split('\0');
+  const key = env.find(v=>v.startsWith('CALNODE_ENCRYPTION_KEY='))!.slice('CALNODE_ENCRYPTION_KEY='.length);
+  // Use the server's envelope-encryption implementation, with only a boolean
+  // leaving the helper. Neither plaintext credentials nor vault keys enter logs.
+  const helper = await mkdtemp(join(artifacts,'ciphertext-check-'));
+  try {
+   await writeFile(join(helper,'main.go'),`package main
+import (
+ "database/sql"
+ "encoding/json"
+ "fmt"
+ "os"
+ "github.com/calnode/calnode/internal/keyvault"
+ "github.com/calnode/calnode/internal/secret"
+ _ "modernc.org/sqlite"
+)
+func main() {
+ var input struct { Database, Key, Expected string }
+ if err:=json.NewDecoder(os.Stdin).Decode(&input); err!=nil { panic(err) }
+ db,err:=sql.Open("sqlite",input.Database); if err!=nil { panic(err) }; defer db.Close()
+ vault,err:=keyvault.Open(db,input.Key,"",false); if err!=nil { panic(err) }
+ var encrypted string
+ if err=db.QueryRow("SELECT google_client_secret_enc FROM server_settings WHERE id=1").Scan(&encrypted); err!=nil { panic(err) }
+ plaintext,err:=secret.Decrypt(vault.DEK(),encrypted); if err!=nil { panic(err) }
+ fmt.Print(plaintext==input.Expected)
+}
+`);
+   const matches = execFileSync('go',['run','-p','2',join(helper,'main.go')],{cwd:resolve('..'),env:{...process.env,GOMAXPROCS:'2'},input:JSON.stringify({Database:join(directory,'test.db'),Key:key,Expected:imported.client_secret}),encoding:'utf8',timeout:60_000});
+   expect(matches==='true','encrypted secret matches the imported client pair').toBe(true);
+  } finally {await rm(helper,{recursive:true,force:true});}
+  const noLeak = async () => {
+   const response = await page.request.get(base+settings);
+   expect(response.status()).toBe(200);
+   const text = await response.text();
+   expect(text.includes(imported.client_secret),'GET never returns the imported secret').toBe(false);
+   expect(await response.json()).toMatchObject({client_id:imported.client_id,client_type:'desktop',desktop_allowed:true,client_secret_set:true,configured:true});
+   expect(await response.json()).not.toHaveProperty('client_secret');
+  };
+  await noLeak();
+  const start = await page.request.get(base+'/v1/calendar/connect?provider=google',{maxRedirects:0});
+  expect(start.status()).toBe(302);
+  const target = new URL(start.headers().location);
+  expect(target.hostname).toBe('accounts.google.com');
+  expect(target.searchParams.get('redirect_uri')).toBe(identityOrigin+'/v1/calendar/callback');
+  expect(target.searchParams.get('client_id')).toBe(imported.client_id);
+  expect(target.searchParams.get('scope')?.split(' ')).toContain('https://www.googleapis.com/auth/calendar');
+  expect(target.searchParams.get('code_challenge_method')).toBe('S256');
+  const state = target.searchParams.get('state')!;
+  const verifier = execFileSync('python3',['-c','import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); print(db.execute("SELECT verifier FROM google_oauth_states WHERE state_hash=? AND purpose=?",(sys.argv[2],"calendar")).fetchone()[0])',join(directory,'test.db'),createHash('sha256').update(state).digest('hex')],{encoding:'utf8'}).trim();
+  expect(createHash('sha256').update(verifier).digest('base64url')===target.searchParams.get('code_challenge'),'challenge binds to the persisted verifier').toBe(true);
+  const stateCookie = (await page.context().cookies(base+'/v1/calendar/callback')).find(c=>c.name==='openslot_google_calendar_state');
+  expect(stateCookie).toMatchObject({httpOnly:true,sameSite:'Lax',path:'/v1/calendar/callback'});
+  expect(stateCookie?.value===state,'OAuth state is bound to this browser').toBe(true);
+  await restartOAuthFixture(page);
+  await noLeak();
+  expect(JSON.stringify(readStored())===JSON.stringify(stored),'restart preserves client type and encrypted pair').toBe(true);
+  // A denial consumes persisted state without making a token/calendar request.
+  const denied = await page.request.get(base+'/v1/calendar/callback?'+new URLSearchParams({state,error:'access_denied'}),{maxRedirects:0});
+  expect(denied.status()).toBe(303);
+  expect(denied.headers().location).toBe(identityOrigin+'/admin/calendar?error=google_denied');
+  const replay = await page.request.get(base+'/v1/calendar/callback?'+new URLSearchParams({state,error:'access_denied'}),{maxRedirects:0});
+  expect(replay.status()).toBe(400);
+  const mismatch = await page.request.get(base+'/v1/calendar/callback?state=google.invalid&error=access_denied',{maxRedirects:0});
+  expect(mismatch.status()).toBe(400);
+  expect(await mismatch.text()).toContain('connect again');
+  await page.goto(base+'/admin/settings/google');
+  for(const width of [1023,390]) {
+   await page.setViewportSize({width,height:991});
+   for(const value of ['light','dark'] as const) {
+    await theme(page,value,width===390);
+    await expect(page.getByRole('heading',{name:'2. Import your Google app',exact:true})).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({path:join(artifacts,`oauth-desktop-import-${width}-${value}.png`),fullPage:true,animations:'disabled',mask:[page.locator('[data-sensitive]'),page.getByLabel('Google OAuth client JSON',{exact:true})]});
+   }
+  }
+  const web = {...imported,client_id:'synthetic-web.apps.googleusercontent.com'};
+  const webSaved = page.waitForResponse(r=>r.url()===base+settings&&r.request().method()==='PATCH');
+  await upload(JSON.stringify({web}));
+  expect((await webSaved).status()).toBe(200);
+  expect(await api(page.request,settings)).toMatchObject({client_id:web.client_id,client_type:'web',configured:true,client_secret_set:true});
+  await expect(page.getByText('Authorised redirect URIs',{exact:true})).toBeVisible();
+  expect(readStored()[2]).toBe('web');
+  expect(runtimeErrors.slice(initialErrors)).toEqual([]);
+  expect(blockedRequests.slice(initialBlocked)).toEqual([]);
+ } finally {
+  await api(page.request,settings,'PATCH',{client_id:''});
+ }
+});
+
+test('Google OAuth calendar query errors and browser state failures show actionable recovery', async ({page}) => {
+ await restartOAuthFixture(page);
+ for(const [code,message] of [
+  ['google_denied','Google access was not approved. Connect again when you are ready.'],
+  ['google_setup','Google rejected the app credentials.'],
+  ['google_failed','Google could not finish the connection.'],
+ ]) {
+  await page.goto(base+'/admin/calendar?error='+code);
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText(message);
+  await expect(alert.getByRole('link',{name:'Google setup',exact:true})).toHaveAttribute('href','/admin/settings/google');
+  await alert.getByRole('link',{name:'Google setup',exact:true}).click();
+  await expect(page.getByLabel('Google OAuth client JSON',{exact:true})).toBeVisible();
+ }
+ await api(page.request,'/v1/settings/google','PATCH',{client_id:'synthetic-state.apps.googleusercontent.com',client_secret:'synthetic-state-secret',client_type:'web'});
+ await page.goto(base+'/v1/auth/callback?state=google.invalid');
+ await expect(page).toHaveURL(base+'/admin/login?error=state');
+ await expect(page.getByText('Login failed: invalid session state. Please try again.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Sign in with Google',exact:true})).toBeVisible();
+ await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
 });

@@ -202,6 +202,8 @@ export type EmailSettings = {
 };
 
 export type GoogleSettings = {
+ client_type: 'web' | 'desktop';
+ desktop_allowed: boolean;
  configuration_error?: string;
 	client_id: string;
 	client_secret_set: boolean;

@@ -2,6 +2,16 @@
 
 This report separates executable/local behavior from external-account setup. No real provider credentials or customer data are used by the automated suite.
 
+## v0.2.0 Google setup validation (2026-10-12)
+
+- Full Go suite: 31 passing packages. Calendar PKCE, expired/replayed state, archived-member reset, and stale refresh persistence have regression coverage.
+- Full Playwright suite: 35 passed with no failures or skips. Imports cover Desktop and Web JSON, invalid/service-account files, matching encrypted credentials, restart persistence, and settings responses that omit secrets.
+- Browser reset coverage checks cancel without mutation, confirmed reset, preserved app credentials and Microsoft state, and explicit Desktop/Web type selection. Setup, manual controls and confirmation dialogs were checked on desktop/mobile in both themes.
+- Frontend type checks: zero errors and warnings. Ten component-style tests and 24 public JavaScript tests passed.
+- Calendar PKCE and stale-client reset tests failed before their fixes and passed afterward. Fresh review identified and verified the recovery fixes.
+
+Google token exchange is exercised with protocol fixtures in this suite. A user's real Desktop app registration, account eligibility and consent still need Google approval; an imported credential file is not proof of a successful connection. Native release checks and installed-service results are recorded with the release artifacts.
+
 ## v0.1.0 local validation (2026-10-12)
 
 - Full Go suite: 30 passing packages and 1,211 passing test cases, including subtests. The opt-in installed-agent runtime test was skipped; five other packages contain no tests.

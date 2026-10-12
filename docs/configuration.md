@@ -53,7 +53,7 @@ A localhost URL cannot be used by guests or a remotely hosted agent. Cloud MCP c
 
 | Connection | Required setup |
 | --- | --- |
-| Google Calendar / Gmail | Configure Google OAuth in Settings, enable the required Google APIs, register the displayed callbacks, then sign in and grant access. |
+| Google Calendar / Gmail | Follow Settings → Google OAuth. Create your own Google app, import its downloaded client JSON, then connect your account. |
 | Microsoft 365 / Outlook | Set `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` and, if needed, `MICROSOFT_TENANT`; register the calendar/auth callbacks before connecting. |
 | CalDAV | Choose iCloud, Fastmail or a custom server and provide its app-specific credentials. |
 | SMTP / Resend | Configure the selected sender in Settings → Email, then use its test control. |
@@ -61,6 +61,24 @@ A localhost URL cannot be used by guests or a remotely hosted agent. Cloud MCP c
 | Zoom, Stripe, LiveKit, recording/storage | Configure the optional service in Settings. These are inherited integrations; see the linked advanced guides and validation report. |
 
 Gmail requests read/send access and becomes the workspace sender. Inbox listening is a separate setting. Disconnecting Gmail restores the configured SMTP/Resend sender. Notion synchronizes future bookings automatically; copying existing bookings requires the explicit backfill action.
+
+### Your own Google app
+
+OpenSlot does not route Google authorization through a shared service or ship a developer's OAuth client. Each operator owns their Google Cloud project and connects their own accounts.
+
+1. Create or select your project in [Google Cloud](https://console.cloud.google.com/). Enable the Google Calendar API and Gmail API.
+2. Configure Google Auth platform branding and audience. In Testing mode, add each connecting account as a test user.
+3. Create an OAuth client. For the default local installation, choose **Desktop app**. For a server on a public domain, choose **Web application** and register all three callback URLs displayed in OpenSlot.
+4. Download the client JSON. In **Settings → Google OAuth**, select that file. OpenSlot imports and encrypts the matching credential pair. It never returns the secret in its settings response.
+5. Connect Calendar and Gmail separately. Each button opens Google's account chooser and consent screen. The Apps page shows the accounts that actually connected; saved app credentials alone do not mean consent succeeded.
+
+Desktop clients require an HTTP loopback `BASE_URL` whose port matches `PORT`, and a loopback `BIND_HOST`. Moving that installation to a public server requires a Web application client. The server rejects Desktop client imports when those local-listener conditions are not met.
+
+To replace an app that has connected calendars, open **Enter credentials manually → Reset Google connections**. Confirming disconnects Gmail and every member's Google Calendar, including archived members. Existing Google events remain; calendar conflict checks and Gmail delivery need accounts to reconnect. Import the replacement client file afterward. Manual entry includes an explicit application-type selector for Desktop-to-Web migrations.
+
+Google's Testing authorizations and refresh tokens expire after seven days for these scopes. Review [Google's audience rules](https://support.google.com/cloud/answer/15549945) and [verification exceptions for personal or internal use](https://support.google.com/cloud/answer/13464323) before choosing publishing settings. Public use of Gmail reading permissions can require Google's restricted-scope verification and a security assessment. Importing a client file does not bypass Google approval.
+
+Google sign-in and Calendar connections use PKCE and short-lived, single-use browser state. Gmail also uses PKCE. Tokens stay on this installation; the browser only carries the temporary authorization code.
 
 Model-provider keys belong to your external agent. OpenSlot's own API keys are separate and can be revoked from the UI. The optional inherited booking-chat settings are also separate from inbox scheduling.
 

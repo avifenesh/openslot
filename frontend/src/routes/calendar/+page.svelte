@@ -78,6 +78,7 @@
 	let error = $state('');
 	let busy = $state(false);
 	let justConnected = $state(false);
+ let googleError = $state('');
 	let disconnectOpen = $state(false);
 	// The connection object, not its id: the id is recreated on every OAuth token refresh
 	// (which opening the calendar picker can trigger), so a stale one strands the request.
@@ -112,6 +113,12 @@
 	}
 
 	onMount(() => {
+  const googleErrors: Record<string,string> = {
+   google_denied:'Google access was not approved. Connect again when you are ready.',
+   google_setup:'Google rejected the app credentials. Import the matching client file in Google setup, then connect again.',
+   google_failed:'Google could not finish the connection. Start a new connection and approve the requested access.'
+  };
+  googleError=googleErrors[$page.url.searchParams.get('error') || ''] || '';
 		justConnected = $page.url.searchParams.get('connected') === 'true';
 		caldavOpen = $page.url.searchParams.get('provider') === 'caldav';
 		zoomJustConnected = $page.url.searchParams.get('zoom') === 'connected';
@@ -273,6 +280,7 @@
 {#if error}
 	<p class="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
 {/if}
+{#if googleError}<div class="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{googleError} <a href="/admin/settings/google" class="font-medium underline">Google setup</a></div>{/if}
 {#if justConnected && status?.connected}
 	<p class="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">Calendar connected successfully.</p>
 {/if}

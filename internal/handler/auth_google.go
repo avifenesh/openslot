@@ -22,6 +22,13 @@ const (
 // Called from server.New when GOOGLE_CLIENT_ID is set.
 // secure should be true when BASE_URL starts with https://.
 func (h *Handler) SetGoogleAuth(clientID, clientSecret, redirectURL string, secure bool) {
+	h.SetGoogleAuthType(clientID, clientSecret, redirectURL, secure, "web")
+}
+
+// SetGoogleDesktopAllowed is set at startup from the actual listener address.
+func (h *Handler) SetGoogleDesktopAllowed(allowed bool) { h.googleDesktopAllowed = allowed }
+
+func (h *Handler) SetGoogleAuthType(clientID, clientSecret, redirectURL string, secure bool, clientType string) {
 	cfg := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -31,6 +38,7 @@ func (h *Handler) SetGoogleAuth(clientID, clientSecret, redirectURL string, secu
 	}
 	h.authMu.Lock()
 	h.googleAuth = cfg
+	h.googleClientType = clientType
 	h.secureCookie = secure
 	h.authMu.Unlock()
 }
@@ -43,13 +51,13 @@ func (h *Handler) LoginGoogle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Google OAuth not configured — set GOOGLE_CLIENT_ID", http.StatusServiceUnavailable)
 		return
 	}
-	state, err := h.newOAuthState(w)
+	state, verifier, err := h.beginGoogleOAuth(w, r, "login", "")
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "auth: generate state", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, ga.AuthCodeURL(state, oauth2.AccessTypeOnline), http.StatusFound)
+	http.Redirect(w, r, ga.AuthCodeURL(state, oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(verifier)), http.StatusFound)
 }
 
 // CallbackGoogle handles the OAuth redirect from Google.
@@ -62,7 +70,8 @@ func (h *Handler) CallbackGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify CSRF state (cookie must match the URL param) and consume it.
-	if !h.verifyOAuthState(w, r) {
+	_, verifier, stateErr := h.consumeGoogleOAuth(w, r, "login")
+	if stateErr != nil {
 		http.Redirect(w, r, "/admin/login?error=state", http.StatusFound)
 		return
 	}
@@ -73,7 +82,7 @@ func (h *Handler) CallbackGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tok, err := ga.Exchange(r.Context(), r.URL.Query().Get("code"))
+	tok, err := ga.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(verifier))
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "auth: token exchange", "error", err)
 		http.Redirect(w, r, "/admin/login?error=oauth", http.StatusFound)
