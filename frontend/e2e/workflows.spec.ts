@@ -595,8 +595,30 @@ async function loginOAuthFixture(page:Page) {
  await api(page.request,'/v1/auth/login/email','POST',{email:'owner@example.test',password:'Hermetic-test-password-2026'});
 }
 
+async function restartOAuthFixture(page:Page,googleEnv:Record<string,string>={}) {
+ // Keep the fixture's generated key across restarts so its disposable keyvault
+ // remains readable. This child was spawned with the fixture's whitelist only.
+ const {readFile} = await import('node:fs/promises');
+ const fixtureEnv = (await readFile(`/proc/${child.pid}/environ`,'utf8')).split('\0');
+ const encryptionKey = fixtureEnv.find(value=>value.startsWith('CALNODE_ENCRYPTION_KEY='))?.slice('CALNODE_ENCRYPTION_KEY='.length);
+ expect(encryptionKey,'the synthetic child has its generated encryption key').toBeTruthy();
+  if(child.exitCode===null)await new Promise<void>(res=>{
+   const timer=setTimeout(()=>child.kill('SIGKILL'),10_000);
+   child.once('exit',()=>{clearTimeout(timer);res();});child.kill('SIGTERM');
+  });
+  child=spawn(resolve(process.env.OPENSLOT_TEST_BINARY??'../openslot'),[],{
+   cwd:directory,stdio:['ignore',log,log],
+   env:{PATH:process.env.PATH,HOME:directory,GOMAXPROCS:'2',TMPDIR:process.env.TMPDIR,PORT:new URL(base).port,BIND_HOST:'127.0.0.1',BASE_URL:identityOrigin,PUBLIC_BASE_URL:publicOrigin,COOKIE_SECURE:'false',DATABASE_URL:`sqlite://${join(directory,'test.db')}`,DATA_DIR:join(directory,'uploads'),CALNODE_ENCRYPTION_KEY:encryptionKey,CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'),LOG_LEVEL:'error',...googleEnv},
+  });
+  await expect.poll(async()=>{
+   if(child.exitCode!==null)throw new Error(`Synthetic OAuth server exited: ${child.exitCode}`);
+   try{return(await page.request.get(base+'/v1/auth/status')).status();}catch{return 0;}
+  },{timeout:30_000}).toBe(200);
+  await loginOAuthFixture(page);
+}
+
 test('Google OAuth rejects incomplete or malformed pairs without replacing active credentials', async ({page}) => {
- await loginOAuthFixture(page);
+ await restartOAuthFixture(page);
  const clientID = 'fixture.apps.googleusercontent.com';
  const settings = '/v1/settings/google';
  const storedPair = () => execFileSync('python3', ['-c', 'import sqlite3,sys,json; db=sqlite3.connect(sys.argv[1]); print(json.dumps(db.execute("SELECT google_client_id,google_client_secret_enc FROM server_settings WHERE id=1").fetchone()))', join(directory,'test.db')], {encoding:'utf8'});
@@ -637,7 +659,7 @@ test('Google OAuth rejects incomplete or malformed pairs without replacing activ
 });
 
 test('Google OAuth Apps and Settings links open isolated Google login with the correct callbacks', async ({page}) => {
- await loginOAuthFixture(page);
+ await restartOAuthFixture(page);
  const clientID = 'fixture.apps.googleusercontent.com';
  const consoleErrors: string[] = [];
  const navigations: {path:string;clientID:string|null;callback:string|null;scopes:string[]}[] = [];
@@ -737,27 +759,7 @@ test('Google OAuth Apps and Settings links open isolated Google login with the c
 
 test('Google OAuth startup rejects malformed saved and environment credentials', async ({page}) => {
  const clientID = 'fixture.apps.googleusercontent.com';
- // Keep the fixture's generated key across restarts so its disposable keyvault
- // remains readable. This child was spawned with the fixture's whitelist only.
- const {readFile} = await import('node:fs/promises');
- const fixtureEnv = (await readFile(`/proc/${child.pid}/environ`,'utf8')).split('\0');
- const encryptionKey = fixtureEnv.find(value=>value.startsWith('CALNODE_ENCRYPTION_KEY='))?.slice('CALNODE_ENCRYPTION_KEY='.length);
- expect(encryptionKey,'the synthetic child has its generated encryption key').toBeTruthy();
- const restart = async (googleEnv:Record<string,string>={}) => {
-  if(child.exitCode===null)await new Promise<void>(res=>{
-   const timer=setTimeout(()=>child.kill('SIGKILL'),10_000);
-   child.once('exit',()=>{clearTimeout(timer);res();});child.kill('SIGTERM');
-  });
-  child=spawn(resolve(process.env.OPENSLOT_TEST_BINARY??'../openslot'),[],{
-   cwd:directory,stdio:['ignore',log,log],
-   env:{PATH:process.env.PATH,HOME:directory,GOMAXPROCS:'2',TMPDIR:process.env.TMPDIR,PORT:new URL(base).port,BIND_HOST:'127.0.0.1',BASE_URL:identityOrigin,PUBLIC_BASE_URL:publicOrigin,COOKIE_SECURE:'false',DATABASE_URL:`sqlite://${join(directory,'test.db')}`,DATA_DIR:join(directory,'uploads'),CALNODE_ENCRYPTION_KEY:encryptionKey,CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'),LOG_LEVEL:'error',...googleEnv},
-  });
-  await expect.poll(async()=>{
-   if(child.exitCode!==null)throw new Error(`Synthetic OAuth server exited: ${child.exitCode}`);
-   try{return(await page.request.get(base+'/v1/auth/status')).status();}catch{return 0;}
-  },{timeout:30_000}).toBe(200);
-  await loginOAuthFixture(page);
- };
+ const restart = (googleEnv:Record<string,string>={}) => restartOAuthFixture(page,googleEnv);
  const assertDisabled = async () => {
   expect(await api(page.request,'/v1/settings/google')).toMatchObject({configured:false,configuration_error:expect.stringMatching(/\S/)});
   expect((await api(page.request,'/v1/calendar/status')).providers??[]).not.toContain('google');
