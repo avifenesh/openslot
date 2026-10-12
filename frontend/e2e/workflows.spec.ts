@@ -15,6 +15,7 @@ const artifacts = resolve(process.env.OPENSLOT_TEST_ARTIFACTS ?? '../artifacts/w
 let child: ChildProcess;
 let directory: string;
 let base: string;
+let identityOrigin: string;
 const publicOrigin = 'https://public.openslot.test';
 let log: number;
 let cookies: Awaited<ReturnType<BrowserContext['cookies']>>;
@@ -66,10 +67,11 @@ test.beforeAll(async ({ request }) => {
   socket.listen(0, '127.0.0.1', () => { const address = socket.address(); if (!address || typeof address === 'string') return rej(new Error('no port')); socket.close(err => err ? rej(err) : res(address.port)); });
  });
  base = `http://127.0.0.1:${port}`;
+ identityOrigin = `http://localhost:${port}`;
  log = openSync(join(artifacts, `server-${process.pid}.log`), 'w');
  child = spawn(resolve(process.env.OPENSLOT_TEST_BINARY ?? '../openslot'), [], {
   cwd: directory, stdio: ['ignore', log, log],
-  env: {PATH:process.env.PATH, HOME:directory, GOMAXPROCS:'2', PORT:String(port), BIND_HOST:'127.0.0.1', BASE_URL:publicOrigin, DATABASE_URL:`sqlite://${join(directory,'test.db')}`, DATA_DIR:join(directory,'uploads'), CALNODE_ENCRYPTION_KEY:randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'), LOG_LEVEL:'error'},
+  env: {PATH:process.env.PATH, HOME:directory, GOMAXPROCS:'2', PORT:String(port), BIND_HOST:'127.0.0.1', BASE_URL:identityOrigin, PUBLIC_BASE_URL:publicOrigin, DATABASE_URL:`sqlite://${join(directory,'test.db')}`, DATA_DIR:join(directory,'uploads'), CALNODE_ENCRYPTION_KEY:randomBytes(32).toString('hex'), CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'), LOG_LEVEL:'error'},
  });
  await expect.poll(async () => {
   if (child.exitCode !== null) throw new Error(`Synthetic server exited: ${child.exitCode}`);
@@ -672,7 +674,7 @@ test('Google OAuth Apps and Settings links open isolated Google login with the c
   const target = new URL(page.url());
   expect(target.hostname).toBe('accounts.google.com');
   expect(target.searchParams.get('client_id')).toBe(clientID);
-  expect(target.searchParams.get('redirect_uri')).toBe(publicOrigin+callback);
+  expect(target.searchParams.get('redirect_uri')).toBe(identityOrigin+callback);
   expect(target.searchParams.get('response_type')).toBe('code');
   expect(target.searchParams.get('state')).toBeTruthy();
   if(gmail)expect(navigations.at(-1)?.scopes).toEqual(expect.arrayContaining(['https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/gmail.send']));
@@ -748,7 +750,7 @@ test('Google OAuth startup rejects malformed saved and environment credentials',
   });
   child=spawn(resolve(process.env.OPENSLOT_TEST_BINARY??'../openslot'),[],{
    cwd:directory,stdio:['ignore',log,log],
-   env:{PATH:process.env.PATH,HOME:directory,GOMAXPROCS:'2',TMPDIR:process.env.TMPDIR,PORT:new URL(base).port,BIND_HOST:'127.0.0.1',BASE_URL:publicOrigin,COOKIE_SECURE:'false',DATABASE_URL:`sqlite://${join(directory,'test.db')}`,DATA_DIR:join(directory,'uploads'),CALNODE_ENCRYPTION_KEY:encryptionKey,CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'),LOG_LEVEL:'error',...googleEnv},
+   env:{PATH:process.env.PATH,HOME:directory,GOMAXPROCS:'2',TMPDIR:process.env.TMPDIR,PORT:new URL(base).port,BIND_HOST:'127.0.0.1',BASE_URL:identityOrigin,PUBLIC_BASE_URL:publicOrigin,COOKIE_SECURE:'false',DATABASE_URL:`sqlite://${join(directory,'test.db')}`,DATA_DIR:join(directory,'uploads'),CALNODE_ENCRYPTION_KEY:encryptionKey,CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'),LOG_LEVEL:'error',...googleEnv},
   });
   await expect.poll(async()=>{
    if(child.exitCode!==null)throw new Error(`Synthetic OAuth server exited: ${child.exitCode}`);
