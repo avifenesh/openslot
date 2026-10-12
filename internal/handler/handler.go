@@ -22,6 +22,8 @@ import (
 )
 
 type Handler struct {
+	inboxPollMu       sync.Mutex
+	inboxMu           sync.Mutex
 	apps              *appconnectors.Service
 	db                *sql.DB
 	logger            *slog.Logger

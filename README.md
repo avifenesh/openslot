@@ -59,7 +59,7 @@ Use the calendar controls to connect accounts, choose which calendars block avai
 
 ### Gmail
 
-Configure Google OAuth in **Settings**, enable the Gmail API in Google Cloud, and register the exact Gmail callback URL shown in **App connections**. Connect Gmail and approve send access. The flow requests `gmail.send` plus account identity, uses PKCE and single-use state bound to the signed-in administrator, and stores the refresh token encrypted.
+Configure Google OAuth in **Settings**, enable the Gmail API in Google Cloud, and register the exact Gmail callback URL shown in **App connections**. Connect Gmail and approve read and send access. The flow requests `gmail.readonly` and `gmail.send` plus account identity, uses PKCE and single-use state bound to the signed-in administrator, and stores the refresh token encrypted.
 
 Connected Gmail becomes the workspace sender for booking notifications and authentication emails. Calendar attachments are preserved. Disconnecting restores the SMTP/Resend sender configured under **Settings → Email**. A Gmail error is reported rather than silently switching the sending account. The email settings test still tests the SMTP/Resend configuration being edited.
 
@@ -121,3 +121,7 @@ make check
 Browser binaries are installed into `frontend/.playwright` with cache cleanup disabled so other projects' browsers are untouched. Browser tests launch a temporary local server, use synthetic accounts and no real provider credentials, and remove their database afterward. Logs and screenshots go in ignored `artifacts/`.
 
 The backend is Go with SQLite. The admin UI is Svelte 5. The public booking pages and embed are framework-free. Internal Go imports, database identifiers, `CALNODE_*` environment variables, and legacy embed aliases remain compatible with the upstream foundation.
+
+### Inbox scheduling
+
+CC a dedicated Gmail mailbox to let your existing agent find available times and send an offer automatically. Codex, Claude Code and an external webhook worker share a request-scoped MCP workflow. Provider credentials stay in the agent. Configure it under **Inbox scheduling** and follow the [setup guide](docs/inbox-agent.md).

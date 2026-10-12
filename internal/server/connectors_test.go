@@ -117,7 +117,7 @@ func TestAgentAndAppConnectorRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := location.Query()
-	if query.Get("code_challenge_method") != "S256" || !strings.Contains(query.Get("scope"), "gmail.send") || strings.Contains(query.Get("scope"), "gmail.readonly") {
+	if query.Get("code_challenge_method") != "S256" || !strings.Contains(query.Get("scope"), "gmail.send") || !strings.Contains(query.Get("scope"), "gmail.readonly") {
 		t.Fatal("wrong Gmail consent/PKCE")
 	}
 	if query.Get("redirect_uri") != "http://localhost:3000/v1/apps/gmail/callback" {

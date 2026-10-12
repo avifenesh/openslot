@@ -26,6 +26,7 @@
 		{ path: '/availability', label: 'Availability', icon: Clock },
 	];
 	const connections = [
+		{ path: '/inbox', label: 'Inbox scheduling', icon: Plug },
 		{ path: '/apps', label: 'App connections', icon: Plug },
 		{ path: '/agent', label: 'Your agent', icon: Plug },
 		{ path: '/share', label: 'Share & embed', icon: Link },

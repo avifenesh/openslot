@@ -78,7 +78,7 @@ func TestGmailOAuthRefreshMIMEAndDisconnect(t *testing.T) {
 				refreshes++
 				io.WriteString(w, `{"access_token":"refreshed-access","token_type":"Bearer","expires_in":3600}`)
 			} else {
-				io.WriteString(w, `{"access_token":"initial-access","refresh_token":"offline-refresh","token_type":"Bearer","expires_in":3600,"scope":"openid email https://www.googleapis.com/auth/gmail.send"}`)
+				io.WriteString(w, `{"access_token":"initial-access","refresh_token":"offline-refresh","token_type":"Bearer","expires_in":3600,"scope":"openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly"}`)
 			}
 		case "/v1/userinfo":
 			io.WriteString(w, `{"email":"host@example.test","email_verified":true,"name":"Host"}`)
@@ -162,7 +162,7 @@ func TestGmailOAuthRefreshMIMEAndDisconnect(t *testing.T) {
 		t.Fatal("missing connection receipt")
 	}
 	visible, _ := json.Marshal(status)
-	if strings.Contains(string(visible), "access") || strings.Contains(string(visible), "refresh") {
+	if strings.Contains(string(visible), "initial-access") || strings.Contains(string(visible), "refreshed-access") || strings.Contains(string(visible), "offline-refresh") {
 		t.Fatal("status leaks credentials")
 	}
 	sendStatus = 429

@@ -14,6 +14,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const GmailReadScope = "https://www.googleapis.com/auth/gmail.readonly"
+
 const GmailSendScope = "https://www.googleapis.com/auth/gmail.send"
 
 func (s *Service) GoogleConfig() *oauth2.Config {
@@ -25,7 +27,7 @@ func (s *Service) GoogleConfig() *oauth2.Config {
 		return nil
 	}
 	config := *original
-	config.Scopes = []string{"openid", "email", GmailSendScope}
+	config.Scopes = []string{"openid", "email", GmailSendScope, GmailReadScope}
 	return &config
 }
 
@@ -45,13 +47,17 @@ func (s *Service) ExchangeGmail(ctx context.Context, userID, code, verifier stri
 	}
 	if scope, ok := token.Extra("scope").(string); ok && scope != "" {
 		granted := false
+		read := false
 		for _, v := range strings.Fields(scope) {
+			if v == GmailReadScope {
+				read = true
+			}
 			if v == GmailSendScope {
 				granted = true
 			}
 		}
-		if !granted {
-			return errors.New("Gmail send permission was not granted")
+		if !granted || !read {
+			return errors.New("Gmail read and send permissions must both be granted")
 		}
 	}
 	if token.RefreshToken == "" {
@@ -72,7 +78,7 @@ func (s *Service) ExchangeGmail(ctx context.Context, userID, code, verifier stri
 	if err != nil {
 		return err
 	}
-	return s.save(ctx, "gmail", userID, string(raw), Config{Email: identity.Email, Name: identity.Name})
+	return s.save(ctx, "gmail", userID, string(raw), Config{Email: identity.Email, Name: identity.Name, InboxAccess: true})
 }
 
 func (s *Service) gmailClient(ctx context.Context, generation, raw string) (*oauth2.Token, error) {
