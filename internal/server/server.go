@@ -14,6 +14,7 @@ import (
 	"github.com/calnode/calnode/internal/config"
 	"github.com/calnode/calnode/internal/demo"
 	"github.com/calnode/calnode/internal/gcal"
+	"github.com/calnode/calnode/internal/googleoauth"
 	"github.com/calnode/calnode/internal/handler"
 	"github.com/calnode/calnode/internal/livekit"
 	"github.com/calnode/calnode/internal/llm"
@@ -152,7 +153,7 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 	calSvc := calendar.NewService(db)
 	calRedirect := cfg.BaseURL + "/v1/calendar/callback"
 
-	if googleClientID != "" {
+	if problem := googleoauth.Problem(googleClientID, googleClientSecret != ""); problem == "" {
 		authRedirect := cfg.BaseURL + "/v1/auth/callback"
 		h.SetGoogleAuth(googleClientID, googleClientSecret, authRedirect, cfg.CookieSecure)
 		logger.Info("Google OAuth login configured", "redirect_url", authRedirect)
@@ -165,7 +166,7 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 			logger.Info("Google Calendar configured", "redirect_url", calRedirect)
 		}
 	} else {
-		logger.Info("Google OAuth not configured — add credentials in Settings or set GOOGLE_CLIENT_ID")
+		logger.Info("Google OAuth requires setup", "reason", problem)
 	}
 
 	if cfg.MicrosoftClientID != "" && cfg.MicrosoftClientSecret != "" {

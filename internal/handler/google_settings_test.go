@@ -351,7 +351,7 @@ func TestLoadGoogleSettingsFromDB_afterSave_returnsCredentials(t *testing.T) {
 	h, database, key := newGoogleHandler(t)
 
 	patchGoogleSettings(t, h,
-		`{"client_id":"db-client-id","client_secret":"db-secret"}`, key)
+		`{"client_id":"db-client-id.apps.googleusercontent.com","client_secret":"db-secret"}`, key)
 
 	var encKey [32]byte
 	for i := 0; i < 32; i++ {
@@ -376,7 +376,7 @@ func TestLoadGoogleSettingsFromDB_afterSave_returnsCredentials(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("LoadGoogleSettingsFromDB returned nil; want credentials")
 	}
-	if cfg.ClientID != "db-client-id" {
+	if cfg.ClientID != "db-client-id.apps.googleusercontent.com" {
 		t.Errorf("ClientID = %q; want db-client-id", cfg.ClientID)
 	}
 	if cfg.ClientSecret != "db-secret" {
@@ -419,7 +419,7 @@ func TestGoogleSettingsPreserveOtherCalendarProviders(t *testing.T) {
 	}
 	existing.Register(ms)
 	h.SetCalendar(existing)
-	for _, body := range []string{`{"client_id":"new-google-client","client_secret":"test-secret"}`, `{"client_id":""}`} {
+	for _, body := range []string{`{"client_id":"new-google-client.apps.googleusercontent.com","client_secret":"test-secret"}`, `{"client_id":""}`} {
 		rec := httptest.NewRecorder()
 		h.RequireAuth(h.PatchGoogleSettings)(rec, authReq(http.MethodPatch, "/v1/settings/google", body, key))
 		if rec.Code != 200 {
@@ -448,13 +448,13 @@ func TestGoogleSettingsPreserveOtherCalendarProviders(t *testing.T) {
 
 func TestGoogleSettingsPreserveEnvironmentSecretOnSave(t *testing.T) {
 	h, database, key := newGoogleHandler(t)
-	h.SetGoogleAuth("environment-client", "environment-secret", "http://localhost:3000/v1/auth/callback", false)
+	h.SetGoogleAuth("environment-client.apps.googleusercontent.com", "environment-secret", "http://localhost:3000/v1/auth/callback", false)
 	rec := getGoogleSettings(t, h, key)
-	if !strings.Contains(rec.Body.String(), `"client_id":"environment-client"`) || !strings.Contains(rec.Body.String(), `"client_secret_set":true`) {
+	if !strings.Contains(rec.Body.String(), `"client_id":"environment-client.apps.googleusercontent.com"`) || !strings.Contains(rec.Body.String(), `"client_secret_set":true`) {
 		t.Fatal("active environment configuration is hidden")
 	}
 	saved := httptest.NewRecorder()
-	h.RequireAuth(h.PatchGoogleSettings)(saved, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"environment-client"}`, key))
+	h.RequireAuth(h.PatchGoogleSettings)(saved, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"environment-client.apps.googleusercontent.com"}`, key))
 	if saved.Code != 200 {
 		t.Fatalf("save: %d", saved.Code)
 	}
@@ -476,7 +476,7 @@ func TestGoogleSettingsDropsGmailWhenPreviousOAuthIsMissing(t *testing.T) {
 	}
 	h.InitAppConnectors(mailer.NewLive(&mailer.Noop{}))
 	rec := httptest.NewRecorder()
-	h.RequireAuth(h.PatchGoogleSettings)(rec, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"new-client","client_secret":"new-secret"}`, key))
+	h.RequireAuth(h.PatchGoogleSettings)(rec, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"new-client.apps.googleusercontent.com","client_secret":"new-secret"}`, key))
 	if rec.Code != 200 {
 		t.Fatalf("save: %d", rec.Code)
 	}
@@ -484,5 +484,53 @@ func TestGoogleSettingsDropsGmailWhenPreviousOAuthIsMissing(t *testing.T) {
 	database.QueryRow("SELECT COUNT(*) FROM app_integrations WHERE provider='gmail'").Scan(&remaining)
 	if remaining != 0 {
 		t.Fatal("stale Gmail credentials survived an unknown previous OAuth configuration")
+	}
+}
+
+func TestGoogleSettingsRejectInvalidPairBeforeChangingConnections(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	valid := `{"client_id":"existing.apps.googleusercontent.com","client_secret":"existing-secret"}`
+	if rec := patchGoogleSettings(t, h, valid, key); rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	for _, body := range []string{
+		`{"client_id":"not-an-oauth-client","client_secret":"some-secret"}`,
+		`{"client_id":"different.apps.googleusercontent.com"}`,
+	} {
+		rec := patchGoogleSettings(t, h, body, key)
+		if rec.Code != 400 {
+			t.Errorf("invalid pair accepted: %d", rec.Code)
+		}
+		var id string
+		database.QueryRow("SELECT google_client_id FROM server_settings WHERE id=1").Scan(&id)
+		if id != "existing.apps.googleusercontent.com" {
+			t.Error("invalid save changed stored credentials")
+		}
+	}
+}
+
+func TestGoogleSettingsIncompletePairIsNotConfigured(t *testing.T) {
+	for _, tc := range []struct{ id, secret string }{
+		{"project-id", "encrypted-placeholder"},
+		{"valid.apps.googleusercontent.com", ""},
+		{"unreadable.apps.googleusercontent.com", "not-decryptable"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			h, database, key := newGoogleHandler(t)
+			if _, err := database.Exec("UPDATE server_settings SET google_client_id=?,google_client_secret_enc=? WHERE id=1", tc.id, tc.secret); err != nil {
+				t.Fatal(err)
+			}
+			rec := getGoogleSettings(t, h, key)
+			var response struct {
+				Configured         bool   `json:"configured"`
+				ConfigurationError string `json:"configuration_error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Configured || response.ConfigurationError == "" {
+				t.Fatalf("invalid pair presented as ready: %s", rec.Body.String())
+			}
+		})
 	}
 }

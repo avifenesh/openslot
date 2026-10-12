@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/calnode/calnode/internal/calendar"
 	"github.com/calnode/calnode/internal/gcal"
+	"github.com/calnode/calnode/internal/googleoauth"
 	"github.com/calnode/calnode/internal/secret"
 )
 
@@ -65,12 +67,23 @@ func (h *Handler) GetGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		if active := h.getGoogleAuth(); active != nil {
 			clientID = active.ClientID
 			secretSet = active.ClientSecret != ""
+			secretEnc = "" // The active environment pair is authoritative when no DB client is selected.
+		}
+	}
+	problem := googleoauth.Problem(clientID, secretSet)
+	if secretEnc != "" {
+		decrypted, err := secret.Decrypt(h.encKey, secretEnc)
+		if err != nil {
+			problem = "The stored Google Client Secret cannot be read. Enter the matching Client Secret again."
+		} else if decrypted == "" {
+			problem = googleoauth.Problem(clientID, false)
 		}
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
-		"client_id":         clientID,
-		"client_secret_set": secretSet,
-		"configured":        clientID != "",
+		"client_id":           clientID,
+		"client_secret_set":   secretSet,
+		"configured":          problem == "",
+		"configuration_error": problem,
 		// base_url is the identity host the server builds OAuth redirect URIs
 		// from (see PatchGoogleSettings); the setup UI renders the exact URIs to
 		// register in Google Cloud so they always match what we send.
@@ -100,12 +113,27 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.ClientID = strings.TrimSpace(req.ClientID)
+	req.ClientSecret = strings.TrimSpace(req.ClientSecret)
 	previousGoogle := h.getGoogleAuth()
-	// Persist an unchanged environment-sourced secret when the operator saves the form.
-	// Otherwise a DB client ID with an empty secret would override the working environment on restart.
+	if req.ClientID != "" {
+		secretAvailable := req.ClientSecret != "" || (previousGoogle != nil && previousGoogle.ClientID == req.ClientID && previousGoogle.ClientSecret != "")
+		if problem := googleoauth.Problem(req.ClientID, secretAvailable); problem != "" {
+			h.writeError(w, http.StatusBadRequest, problem)
+			return
+		}
+	}
+	// Preserve a usable stored ciphertext on an unchanged client. If startup
+	// fell back to matching environment credentials, persist that active secret.
 	if previousGoogle != nil && req.ClientID == previousGoogle.ClientID && req.ClientSecret == "" {
 		var stored string
-		if err := h.db.QueryRowContext(r.Context(), "SELECT google_client_secret_enc FROM server_settings WHERE id=1").Scan(&stored); err == nil && stored == "" {
+		err := h.db.QueryRowContext(r.Context(), "SELECT google_client_secret_enc FROM server_settings WHERE id=1").Scan(&stored)
+		if err != nil && err != sql.ErrNoRows {
+			h.writeError(w, http.StatusInternalServerError, "could not read saved Google settings")
+			return
+		}
+		decoded, decryptErr := secret.Decrypt(h.encKey, stored)
+		if stored == "" || decryptErr != nil || decoded == "" {
 			req.ClientSecret = previousGoogle.ClientSecret
 		}
 	}

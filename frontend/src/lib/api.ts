@@ -202,6 +202,7 @@ export type EmailSettings = {
 };
 
 export type GoogleSettings = {
+ configuration_error?: string;
 	client_id: string;
 	client_secret_set: boolean;
 	configured: boolean;

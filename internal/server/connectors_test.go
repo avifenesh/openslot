@@ -38,7 +38,7 @@ func TestAgentAndAppConnectorRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
-	app, drain := New(ctx, &config.Config{BaseURL: "http://localhost:3000", DataDir: t.TempDir(), GoogleClientID: "test-client", GoogleClientSecret: "test-secret"}, database, logger)
+	app, drain := New(ctx, &config.Config{BaseURL: "http://localhost:3000", DataDir: t.TempDir(), GoogleClientID: "test-client.apps.googleusercontent.com", GoogleClientSecret: "test-secret"}, database, logger)
 	t.Cleanup(func() { cancel(); drain() })
 	call := func(method, path, body, key string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -148,5 +148,44 @@ func TestAgentAndAppConnectorRoutes(t *testing.T) {
 	}
 	if result := call("GET", "/v1/agent-connectors", "", key.Key); result.Code != 401 {
 		t.Fatal("revoked key accepted")
+	}
+}
+
+func TestInvalidGoogleConfigurationDoesNotOfferSignIn(t *testing.T) {
+	for _, tc := range []struct{ name, id, secret string }{
+		{"malformed ID", "project-id", "secret"},
+		{"missing secret", "valid.apps.googleusercontent.com", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			database, err := db.Open("sqlite://:memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { database.Close() })
+			if err := db.Migrate(database); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			app, drain := New(ctx, &config.Config{BaseURL: "http://localhost:3000", DataDir: t.TempDir(), GoogleClientID: tc.id, GoogleClientSecret: tc.secret}, database, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			t.Cleanup(func() { cancel(); drain() })
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, httptest.NewRequest("GET", "/v1/auth/status", nil))
+			var state struct {
+				Providers []string `json:"providers"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+				t.Fatal(err)
+			}
+			for _, p := range state.Providers {
+				if p == "google" {
+					t.Fatal("invalid credentials offered as Google sign-in")
+				}
+			}
+			rec = httptest.NewRecorder()
+			app.ServeHTTP(rec, httptest.NewRequest("GET", "/v1/auth/login", nil))
+			if rec.Code != 503 || rec.Header().Get("Location") != "" {
+				t.Fatal("invalid credentials redirected to Google")
+			}
+		})
 	}
 }
