@@ -21,16 +21,17 @@ import (
 type GoogleOAuthConfig struct {
 	ClientID     string
 	ClientSecret string
+	ClientType   string
 }
 
 // LoadGoogleSettingsFromDB reads Google OAuth credentials from server_settings
 // and decrypts the client secret. Returns nil (not an error) when client_id is empty.
 func LoadGoogleSettingsFromDB(db *sql.DB, encKey [32]byte) (*GoogleOAuthConfig, error) {
-	var clientID, secretEnc string
+	var clientID, secretEnc, clientType string
 	err := db.QueryRow(`
-		SELECT google_client_id, google_client_secret_enc
+		SELECT google_client_id, google_client_secret_enc, google_client_type
 		FROM server_settings WHERE id = 1`).
-		Scan(&clientID, &secretEnc)
+		Scan(&clientID, &secretEnc, &clientType)
 	if err == sql.ErrNoRows || clientID == "" {
 		return nil, nil
 	}
@@ -44,7 +45,7 @@ func LoadGoogleSettingsFromDB(db *sql.DB, encKey [32]byte) (*GoogleOAuthConfig, 
 			return nil, fmt.Errorf("decrypt google client secret: %w", err)
 		}
 	}
-	return &GoogleOAuthConfig{ClientID: clientID, ClientSecret: clientSecret}, nil
+	return &GoogleOAuthConfig{ClientID: clientID, ClientSecret: clientSecret, ClientType: clientType}, nil
 }
 
 // GetGoogleSettings handles GET /v1/settings/google (admin only).
@@ -52,11 +53,11 @@ func (h *Handler) GetGoogleSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireAdmin(w, r); !ok {
 		return
 	}
-	var clientID, secretEnc string
+	var clientID, secretEnc, clientType string
 	err := h.db.QueryRowContext(r.Context(), `
-		SELECT google_client_id, google_client_secret_enc
+		SELECT google_client_id, google_client_secret_enc, google_client_type
 		FROM server_settings WHERE id = 1`).
-		Scan(&clientID, &secretEnc)
+		Scan(&clientID, &secretEnc, &clientType)
 	if err != nil && err != sql.ErrNoRows {
 		h.logger.ErrorContext(r.Context(), "google settings: query", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "internal error")
@@ -71,6 +72,9 @@ func (h *Handler) GetGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	problem := googleoauth.Problem(clientID, secretSet)
+	if clientType == "desktop" && !h.googleDesktopAllowed {
+		problem = "This Google Desktop app requires OpenSlot to listen on localhost. Import a Web application client for a hosted server."
+	}
 	if secretEnc != "" {
 		decrypted, err := secret.Decrypt(h.encKey, secretEnc)
 		if err != nil {
@@ -81,6 +85,8 @@ func (h *Handler) GetGoogleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"client_id":           clientID,
+		"client_type":         clientType,
+		"desktop_allowed":     h.googleDesktopAllowed,
 		"client_secret_set":   secretSet,
 		"configured":          problem == "",
 		"configuration_error": problem,
@@ -103,10 +109,13 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusServiceUnavailable, "not available in the demo")
 		return
 	}
+	h.googleSetupMu.Lock()
+	defer h.googleSetupMu.Unlock()
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	var req struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
+		ClientType   string `json:"client_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, http.StatusBadRequest, "invalid JSON")
@@ -116,10 +125,47 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 	req.ClientID = strings.TrimSpace(req.ClientID)
 	req.ClientSecret = strings.TrimSpace(req.ClientSecret)
 	previousGoogle := h.getGoogleAuth()
+	if req.ClientType == "" {
+		h.authMu.RLock()
+		req.ClientType = h.googleClientType
+		h.authMu.RUnlock()
+		if req.ClientType == "" {
+			req.ClientType = "web"
+		}
+	}
+	if req.ClientType != "web" && req.ClientType != "desktop" {
+		h.writeError(w, 400, "Google client type must be web or desktop")
+		return
+	}
+	if req.ClientID != "" && req.ClientType == "desktop" && !h.googleDesktopAllowed {
+		h.writeError(w, 400, "A Desktop app can only connect to a local OpenSlot installation. Import a Web application client for this server.")
+		return
+	}
 	if req.ClientID != "" {
 		secretAvailable := req.ClientSecret != "" || (previousGoogle != nil && previousGoogle.ClientID == req.ClientID && previousGoogle.ClientSecret != "")
 		if problem := googleoauth.Problem(req.ClientID, secretAvailable); problem != "" {
 			h.writeError(w, http.StatusBadRequest, problem)
+			return
+		}
+	}
+	// Existing refresh tokens belong to their original OAuth client. Never leave
+	// working calendars attached to a replacement client that cannot refresh them.
+	var storedClientID string
+	if err := h.db.QueryRowContext(r.Context(), "SELECT google_client_id FROM server_settings WHERE id=1").Scan(&storedClientID); err != nil && err != sql.ErrNoRows {
+		h.writeError(w, 500, "could not read Google setup")
+		return
+	}
+	if storedClientID == "" && previousGoogle != nil {
+		storedClientID = previousGoogle.ClientID
+	}
+	if req.ClientID != storedClientID {
+		var connected int
+		if err := h.db.QueryRowContext(r.Context(), "SELECT count(*) FROM calendar_connections WHERE provider='google'").Scan(&connected); err != nil {
+			h.writeError(w, 500, "could not check Google connections")
+			return
+		}
+		if connected > 0 {
+			h.writeError(w, http.StatusConflict, "Use Reset Google connections in Google setup before replacing or removing this app. This also handles calendars belonging to archived members.")
 			return
 		}
 	}
@@ -151,6 +197,7 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.db.ExecContext(r.Context(), `
 			UPDATE server_settings SET
 			  google_client_id = '', google_client_secret_enc = '',
+		  google_client_type = 'web',
 			  updated_at = datetime('now')
 			WHERE id = 1`); err != nil {
 			h.logger.ErrorContext(r.Context(), "google settings: clear", "error", err)
@@ -174,9 +221,9 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err = h.db.ExecContext(r.Context(), `
 			UPDATE server_settings SET
-			  google_client_id = ?, google_client_secret_enc = ?,
+			  google_client_id = ?, google_client_secret_enc = ?, google_client_type = ?,
 			  updated_at = datetime('now')
-			WHERE id = 1`, req.ClientID, enc); err != nil {
+			WHERE id = 1`, req.ClientID, enc, req.ClientType); err != nil {
 			h.logger.ErrorContext(r.Context(), "google settings: update", "error", err)
 			h.writeError(w, http.StatusInternalServerError, "internal error")
 			return
@@ -184,9 +231,9 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if _, err := h.db.ExecContext(r.Context(), `
 			UPDATE server_settings SET
-			  google_client_id = ?,
+			  google_client_id = ?, google_client_type = ?,
 			  updated_at = datetime('now')
-			WHERE id = 1`, req.ClientID); err != nil {
+			WHERE id = 1`, req.ClientID, req.ClientType); err != nil {
 			h.logger.ErrorContext(r.Context(), "google settings: update (keep secret)", "error", err)
 			h.writeError(w, http.StatusInternalServerError, "internal error")
 			return
@@ -225,11 +272,74 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.replaceGoogleCalendar(gc)
-		h.SetGoogleAuth(req.ClientID, resolvedSecret, h.baseURL+"/v1/auth/callback", h.secureCookie)
+		h.SetGoogleAuthType(req.ClientID, resolvedSecret, h.baseURL+"/v1/auth/callback", h.secureCookie, req.ClientType)
 		h.logger.Info("google settings: credentials updated and gcal hot-reloaded")
 	}
 
 	h.GetGoogleSettings(w, r)
+}
+
+// ResetGoogleConnections lets an administrator recover a workspace even when
+// a departed member cannot sign in to disconnect their calendar themselves.
+func (h *Handler) ResetGoogleConnections(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireAdmin(w, r); !ok {
+		return
+	}
+	if h.demoMode {
+		h.writeError(w, 503, "not available in the demo")
+		return
+	}
+	h.googleSetupMu.Lock()
+	defer h.googleSetupMu.Unlock()
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	if h.apps != nil {
+		if err := h.apps.Disconnect(ctx, "gmail"); err != nil {
+			h.writeError(w, 503, "Could not disconnect Gmail. Try again.")
+			return
+		}
+	}
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		h.writeError(w, 500, "could not reset Google connections")
+		return
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, "SELECT DISTINCT user_id FROM calendar_connections WHERE provider='google' AND is_destination=1")
+	if err != nil {
+		h.writeError(w, 500, "could not reset Google connections")
+		return
+	}
+	var users []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
+		users = append(users, id)
+	}
+	rows.Close()
+	if err != nil || rows.Err() != nil {
+		h.writeError(w, 500, "could not reset Google connections")
+		return
+	}
+	for _, statement := range []string{"DELETE FROM calendar_connections WHERE provider='google'", "DELETE FROM connection_calendars WHERE provider='google'", "DELETE FROM google_oauth_states WHERE purpose='calendar'", "DELETE FROM app_oauth_states"} {
+		if _, err = tx.ExecContext(ctx, statement); err != nil {
+			h.writeError(w, 500, "could not reset Google connections")
+			return
+		}
+	}
+	for _, id := range users {
+		if _, err = tx.ExecContext(ctx, `UPDATE calendar_connections SET is_destination=1 WHERE id=(SELECT id FROM calendar_connections WHERE user_id=? ORDER BY created_at,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM calendar_connections WHERE user_id=? AND is_destination=1)`, id, id); err != nil {
+			h.writeError(w, 500, "could not reset Google connections")
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		h.writeError(w, 500, "could not reset Google connections")
+		return
+	}
+	h.writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 // Build a replacement service rather than mutating providers used by active requests.

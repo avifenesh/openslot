@@ -1,15 +1,19 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/calnode/calnode/internal/caldav"
 	"github.com/calnode/calnode/internal/calendar"
 	"github.com/calnode/calnode/internal/calendar/microsoft"
+	"github.com/calnode/calnode/internal/gcal"
+	"golang.org/x/oauth2"
 )
 
 // stateSep separates the provider name from the userID inside the (encrypted)
@@ -39,6 +43,15 @@ func (h *Handler) ConnectCalendar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	user, _ := userFromContext(r.Context())
+	if google, ok := p.(*gcal.Client); ok {
+		state, verifier, err := h.beginGoogleOAuth(w, r, "calendar", user.ID)
+		if err != nil {
+			h.writeError(w, 500, "could not start Google sign-in")
+			return
+		}
+		http.Redirect(w, r, google.AuthURLWithPKCE(state, verifier), http.StatusFound)
+		return
+	}
 	// Encode the provider in the state so the shared callback routes correctly.
 	state, err := p.EncryptState(p.Name() + stateSep + user.ID)
 	if err != nil {
@@ -58,6 +71,10 @@ func (h *Handler) CalendarCallback(w http.ResponseWriter, r *http.Request) {
 	svc := h.getCal()
 	if svc == nil || !svc.Any() {
 		h.writeError(w, http.StatusNotImplemented, "Calendar integration not configured")
+		return
+	}
+	if strings.HasPrefix(r.URL.Query().Get("state"), "google.") {
+		h.googleCalendarCallback(w, r)
 		return
 	}
 
@@ -91,6 +108,10 @@ func (h *Handler) CalendarCallback(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "missing code")
 		return
 	}
+	if p.Name() == "google" {
+		h.writeError(w, 400, "Google sign-in has changed; connect Google Calendar again")
+		return
+	}
 
 	if err := p.Exchange(r.Context(), userID, code, "primary"); err != nil {
 		h.logger.ErrorContext(r.Context(), "calendar callback: exchange", "error", err, "user_id", userID)
@@ -104,6 +125,48 @@ func (h *Handler) CalendarCallback(w http.ResponseWriter, r *http.Request) {
 	// Multi-calendar: connecting is additive. The first connection becomes the destination
 	// (handled in the provider's saveToken); subsequent ones are conflict-check only.
 
+	http.Redirect(w, r, h.baseURL+"/admin/calendar?connected=true", http.StatusFound)
+}
+
+func (h *Handler) googleCalendarCallback(w http.ResponseWriter, r *http.Request) {
+	h.googleSetupMu.Lock()
+	defer h.googleSetupMu.Unlock()
+	userID, verifier, err := h.consumeGoogleOAuth(w, r, "calendar")
+	if err != nil || userID == "" {
+		h.writeError(w, 400, "Google sign-in expired or does not match this browser; connect again")
+		return
+	}
+	fail := func(code string) { http.Redirect(w, r, h.baseURL+"/admin/calendar?error="+code, http.StatusSeeOther) }
+	if r.URL.Query().Get("error") != "" {
+		fail("google_denied")
+		return
+	}
+	if r.URL.Query().Get("code") == "" {
+		fail("google_failed")
+		return
+	}
+	svc := h.getCal()
+	if svc == nil {
+		fail("google_setup")
+		return
+	}
+	google, ok := svc.Provider("google").(*gcal.Client)
+	if !ok {
+		fail("google_setup")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	if err := google.ExchangeWithPKCE(ctx, userID, r.URL.Query().Get("code"), "primary", verifier); err != nil {
+		var providerError *oauth2.RetrieveError
+		if errors.As(err, &providerError) && providerError.ErrorCode == "invalid_client" {
+			fail("google_setup")
+			return
+		}
+		h.logger.ErrorContext(ctx, "Google Calendar connection failed", "error", err)
+		fail("google_failed")
+		return
+	}
 	http.Redirect(w, r, h.baseURL+"/admin/calendar?connected=true", http.StatusFound)
 }
 

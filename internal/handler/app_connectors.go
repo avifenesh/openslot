@@ -104,6 +104,8 @@ func (h *Handler) GmailCallback(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	h.googleSetupMu.Lock()
+	defer h.googleSetupMu.Unlock()
 	cookie, err := r.Cookie(gmailStateCookie)
 	state := r.URL.Query().Get("state")
 	http.SetCookie(w, &http.Cookie{Name: gmailStateCookie, Value: "", Path: "/v1/apps/gmail/callback", HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1})

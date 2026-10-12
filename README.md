@@ -36,6 +36,8 @@ openslot doctor
 
 Calendar/email services require their own account setup. OpenSlot does not supply a shared OAuth application or hosted model. The scheduler works without them; connected calendars add external busy times, and a configured sender enables email delivery.
 
+For Google, open **Settings → Google OAuth** and follow the setup guide. Each installation uses a Google project owned by its operator. Import Google's downloaded client JSON, then choose **Connect Google Calendar** or **Connect Gmail**. Local installs accept Desktop app clients; hosted servers use Web application clients. No OpenSlot developer credentials are included in the executable.
+
 ## Bring your agent
 
 Open **Your agent**, choose your client, and create an OpenSlot key. Copy the generated setup into that agent. Your model-provider credentials stay there.

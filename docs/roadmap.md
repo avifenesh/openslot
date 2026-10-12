@@ -9,10 +9,11 @@
 - Checksummed release archives and an installer that preserves data.
 - Public booking origins in copied links and embed snippets.
 - Secondary-host archive protection, named icon actions, and meeting-editor notification placement.
+- Google setup guide with client JSON import, separate local Desktop and hosted Web app support, and PKCE-protected callbacks. Each installation uses its operator's own Google app.
 
 ## Next priorities
 
-1. **Provider onboarding.** Clearer guided setup for self-hosted Google/Microsoft OAuth applications. A shared OAuth application would require its own operated service and publisher verification; it is not part of the current self-hosted model.
+1. **Microsoft onboarding.** Bring Microsoft OAuth setup into the UI. Google setup now supports importing the operator's client file; Google project creation and approval remain with Google.
 2. **Backup and restore tooling.** A command that snapshots SQLite and includes configuration/uploads, plus a verified restore flow. The current documented method stops the server and copies both directories.
 3. **Inbox recovery controls.** Let an operator inspect abandoned tasks and uncertain delivery, reconcile against Sent mail, and explicitly retry where safe. Automatic retries must not duplicate an email that Gmail accepted.
 4. **Inbox context and languages.** Better multi-message conversation context, preferences across timezones, and translated replies. The current worker handles one addressed message and a configured meeting type.

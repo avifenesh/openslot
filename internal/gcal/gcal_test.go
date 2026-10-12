@@ -3,6 +3,8 @@ package gcal
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +48,53 @@ func seedUser(t *testing.T, db *sql.DB, userID string) {
 		userID, userID+"@test.example")
 	if err != nil {
 		t.Fatalf("seedUser(%q): %v", userID, err)
+	}
+}
+
+func TestStaleCalendarClientCannotUndoDisconnect(t *testing.T) {
+	for _, reconnect := range []bool{false, true} {
+		t.Run(map[bool]string{false: "disconnect", true: "reconnect"}[reconnect], func(t *testing.T) {
+			c := newTestClient(t)
+			seedUser(t, c.db, "user-1")
+			ctx := context.Background()
+			if err := c.saveToken(ctx, "user-1", "primary", "user@test.example", &oauth2.Token{AccessToken: "old", RefreshToken: "old-refresh", Expiry: time.Now().Add(time.Hour)}); err != nil {
+				t.Fatal(err)
+			}
+			stale, _, err := c.DestinationClient(ctx, "user-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = c.Disconnect(ctx, "user-1"); err != nil {
+				t.Fatal(err)
+			}
+			if reconnect {
+				if err = c.saveToken(ctx, "user-1", "primary", "user@test.example", &oauth2.Token{AccessToken: "new", RefreshToken: "new-refresh", Expiry: time.Now().Add(time.Hour)}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+			defer endpoint.Close()
+			response, err := stale.Get(endpoint.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			var count int
+			c.db.QueryRow("SELECT count(*) FROM calendar_connections WHERE provider='google'").Scan(&count)
+			if !reconnect && count != 0 {
+				t.Fatal("stale request recreated disconnected account")
+			}
+			if reconnect {
+				var encrypted string
+				if err = c.db.QueryRow("SELECT access_token_enc FROM calendar_connections WHERE provider='google'").Scan(&encrypted); err != nil {
+					t.Fatal(err)
+				}
+				token, err := c.decrypt(encrypted)
+				if err != nil || string(token) != "new" {
+					t.Fatal("stale request overwrote reconnected account")
+				}
+			}
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -69,6 +70,10 @@ func TestLoginGoogle_setsStateCookieAndRedirects(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/login", nil)
 	rec := httptest.NewRecorder()
 	h.LoginGoogle(rec, req)
+	location, _ := url.Parse(rec.Header().Get("Location"))
+	if location.Query().Get("code_challenge") == "" || location.Query().Get("code_challenge_method") != "S256" {
+		t.Fatal("Google login must use PKCE S256")
+	}
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d; want 302", rec.Code)
@@ -139,9 +144,14 @@ func TestCallbackGoogle_redirectsToDeniedOnGoogleError(t *testing.T) {
 	h, _, _ := authTestSetup(t)
 	h.SetGoogleAuth("client-id", "client-secret", "http://localhost/v1/auth/callback", false)
 
+	start := httptest.NewRecorder()
+	h.LoginGoogle(start, httptest.NewRequest("GET", "/v1/auth/login", nil))
+	location, _ := url.Parse(start.Header().Get("Location"))
 	req := httptest.NewRequest(http.MethodGet,
-		"/v1/auth/callback?state=abc&error=access_denied", nil)
-	req.AddCookie(&http.Cookie{Name: "calnode_oauth_state", Value: "abc"})
+		"/v1/auth/callback?state="+url.QueryEscape(location.Query().Get("state"))+"&error=access_denied", nil)
+	for _, cookie := range start.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
 	rec := httptest.NewRecorder()
 	h.CallbackGoogle(rec, req)
 

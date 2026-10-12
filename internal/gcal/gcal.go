@@ -75,6 +75,10 @@ func (c *Client) AuthURL(state string) string {
 	)
 }
 
+func (c *Client) AuthURLWithPKCE(state, verifier string) string {
+	return c.config.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce, oauth2.S256ChallengeOption(verifier))
+}
+
 // EncryptState encrypts userID into an opaque, URL-safe string for use as the
 // OAuth state parameter, preventing CSRF without server-side state storage.
 func (c *Client) EncryptState(userID string) (string, error) {
@@ -91,7 +95,15 @@ func (c *Client) DecryptState(state string) (string, error) {
 // connected account's email so a user can connect several Google accounts (each a distinct
 // row); re-connecting the same account updates its row rather than duplicating it.
 func (c *Client) Exchange(ctx context.Context, userID, code, calendarID string) error {
-	tok, err := c.config.Exchange(ctx, code)
+	return c.exchange(ctx, userID, code, calendarID)
+}
+
+func (c *Client) ExchangeWithPKCE(ctx context.Context, userID, code, calendarID, verifier string) error {
+	return c.exchange(ctx, userID, code, calendarID, oauth2.VerifierOption(verifier))
+}
+
+func (c *Client) exchange(ctx context.Context, userID, code, calendarID string, opts ...oauth2.AuthCodeOption) error {
+	tok, err := c.config.Exchange(ctx, code, opts...)
 	if err != nil {
 		return fmt.Errorf("gcal: token exchange: %w", err)
 	}
@@ -146,8 +158,9 @@ func (c *Client) Disconnect(ctx context.Context, userID string) error {
 }
 
 // buildClient turns one connection row's encrypted tokens into an authorized *http.Client
-// whose refreshes persist back to that same account's row (keyed by accountEmail).
-func (c *Client) buildClient(ctx context.Context, userID, accessEnc, refreshEnc, calID, expiryStr, accountEmail string) (*http.Client, error) {
+// whose refreshes update only the captured connection generation. A request that
+// outlives disconnect/reconnect must not recreate or overwrite that account.
+func (c *Client) buildClient(ctx context.Context, userID, connectionID, accessEnc, refreshEnc, expiryStr string) (*http.Client, error) {
 	access, err := c.decrypt(accessEnc)
 	if err != nil {
 		return nil, fmt.Errorf("gcal: decrypt access token: %w", err)
@@ -172,7 +185,7 @@ func (c *Client) buildClient(ctx context.Context, userID, accessEnc, refreshEnc,
 	saving := &oauthstore.SavingTokenSource{
 		Inner: oauth2.ReuseTokenSource(nil, c.config.TokenSource(ctx, tok)),
 		Save: func(ctx context.Context, t *oauth2.Token) error {
-			return c.saveToken(ctx, userID, calID, accountEmail, t)
+			return c.saveRefreshedToken(ctx, connectionID, t)
 		},
 		Logger: c.logger,
 		LogMsg: "gcal: failed to persist refreshed token",
@@ -185,7 +198,7 @@ func (c *Client) buildClient(ctx context.Context, userID, accessEnc, refreshEnc,
 // connection (LIMIT 1). Filters by check_conflicts/is_destination (-1 means any). Returns
 // (nil, "", nil) when no matching connection exists. Used for the single destination write.
 func (c *Client) httpClient(ctx context.Context, userID string, checkConflicts, isDestination int) (*http.Client, string, error) {
-	q := `SELECT access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
+	q := `SELECT id, access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
 	      FROM calendar_connections
 	      WHERE user_id = ? AND provider = 'google'`
 	args := []any{userID}
@@ -193,8 +206,8 @@ func (c *Client) httpClient(ctx context.Context, userID string, checkConflicts, 
 	q += frag + " LIMIT 1"
 	args = append(args, fragArgs...)
 
-	var accessEnc, refreshEnc, calID, expiryStr, accountEmail string
-	err := c.db.QueryRowContext(ctx, q, args...).Scan(&accessEnc, &refreshEnc, &calID, &expiryStr, &accountEmail)
+	var connectionID, accessEnc, refreshEnc, calID, expiryStr, accountEmail string
+	err := c.db.QueryRowContext(ctx, q, args...).Scan(&connectionID, &accessEnc, &refreshEnc, &calID, &expiryStr, &accountEmail)
 	if err == sql.ErrNoRows {
 		return nil, "", nil
 	}
@@ -211,7 +224,7 @@ func (c *Client) httpClient(ctx context.Context, userID string, checkConflicts, 
 			calID = subCal
 		}
 	}
-	hc, err := c.buildClient(ctx, userID, accessEnc, refreshEnc, calID, expiryStr, accountEmail)
+	hc, err := c.buildClient(ctx, userID, connectionID, accessEnc, refreshEnc, expiryStr)
 	if err != nil {
 		return nil, "", err
 	}
@@ -227,17 +240,17 @@ type fbConn struct {
 
 func (c *Client) freeBusyConnections(ctx context.Context, userID string) ([]fbConn, error) {
 	rows, err := c.db.QueryContext(ctx, `
-		SELECT access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
+		SELECT id, access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
 		FROM calendar_connections
 		WHERE user_id = ? AND provider = 'google' AND check_conflicts = 1`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("gcal: load freebusy connections: %w", err)
 	}
-	type rowData struct{ accessEnc, refreshEnc, calID, expiryStr, accountEmail string }
+	type rowData struct{ connectionID, accessEnc, refreshEnc, calID, expiryStr, accountEmail string }
 	var data []rowData
 	for rows.Next() {
 		var d rowData
-		if err := rows.Scan(&d.accessEnc, &d.refreshEnc, &d.calID, &d.expiryStr, &d.accountEmail); err != nil {
+		if err := rows.Scan(&d.connectionID, &d.accessEnc, &d.refreshEnc, &d.calID, &d.expiryStr, &d.accountEmail); err != nil {
 			rows.Close() // #nosec G104 -- already returning the scan error; nothing more actionable
 			return nil, fmt.Errorf("gcal: scan freebusy connection: %w", err)
 		}
@@ -258,7 +271,7 @@ func (c *Client) freeBusyConnections(ctx context.Context, userID string) ([]fbCo
 		if len(calIDs) == 0 {
 			continue // account fully deselected
 		}
-		hc, err := c.buildClient(ctx, userID, d.accessEnc, d.refreshEnc, d.calID, d.expiryStr, d.accountEmail)
+		hc, err := c.buildClient(ctx, userID, d.connectionID, d.accessEnc, d.refreshEnc, d.expiryStr)
 		if err != nil {
 			return nil, fmt.Errorf("gcal: load conflict calendar credentials: %w", err)
 		}
@@ -287,10 +300,29 @@ func (c *Client) HasDestination(ctx context.Context, userID string) (bool, error
 	return err == nil, err
 }
 
-// saveToken encrypts and upserts an OAuth token for ONE Google account (keyed by
-// accountEmail), so a user can connect several. Replaces only that account's row (a refresh of
-// one account never touches another). On a new connection: check_conflicts=1, and it becomes
-// the destination only if the user has none yet. On a refresh (row already exists): the
+func (c *Client) saveRefreshedToken(ctx context.Context, connectionID string, tok *oauth2.Token) error {
+	accessEnc, err := c.encrypt([]byte(tok.AccessToken))
+	if err != nil {
+		return err
+	}
+	refreshEnc := ""
+	if tok.RefreshToken != "" {
+		refreshEnc, err = c.encrypt([]byte(tok.RefreshToken))
+		if err != nil {
+			return err
+		}
+	}
+	expiry := ""
+	if !tok.Expiry.IsZero() {
+		expiry = tok.Expiry.UTC().Format(time.RFC3339)
+	}
+	_, err = c.db.ExecContext(ctx, `UPDATE calendar_connections SET access_token_enc=?, refresh_token_enc=CASE WHEN ?='' THEN refresh_token_enc ELSE ? END, expiry_at=? WHERE id=? AND provider='google'`, accessEnc, refreshEnc, refreshEnc, expiry, connectionID)
+	return err
+}
+
+// saveToken encrypts and upserts a newly authorized token for ONE Google account (keyed by
+// accountEmail), so a user can connect several. On a new connection: check_conflicts=1, and it becomes
+// the destination only if the user has none yet. On reconnection (row already exists): the
 // existing check_conflicts/is_destination flags are preserved.
 func (c *Client) saveToken(ctx context.Context, userID, calID, accountEmail string, tok *oauth2.Token) error {
 	accessEnc, err := c.encrypt([]byte(tok.AccessToken))

@@ -49,6 +49,92 @@ func patchGoogleSettings(t *testing.T, h *handler.Handler, body, apiKey string) 
 // GET /v1/settings/google
 // ---------------------------------------------------------------------------
 
+func TestGoogleDesktopClientImport(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	body := `{"client_id":"own-desktop.apps.googleusercontent.com","client_secret":"synthetic-desktop-secret","client_type":"desktop"}`
+	if rec := patchGoogleSettings(t, h, body, key); rec.Code != 400 {
+		t.Fatalf("hosted server accepted desktop client: %d", rec.Code)
+	}
+	h.SetGoogleDesktopAllowed(true)
+	rec := patchGoogleSettings(t, h, body, key)
+	if rec.Code != 200 {
+		t.Fatalf("desktop import: %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "synthetic-desktop-secret") {
+		t.Fatal("response exposed client secret")
+	}
+	saved, err := handler.LoadGoogleSettingsFromDB(database, [32]byte{0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef})
+	if err != nil || saved.ClientType != "desktop" || saved.ClientSecret != "synthetic-desktop-secret" {
+		t.Fatalf("persisted desktop client invalid: %v", err)
+	}
+	h.SetGoogleDesktopAllowed(false)
+	var status map[string]any
+	json.Unmarshal(getGoogleSettings(t, h, key).Body.Bytes(), &status)
+	if status["configured"] != false {
+		t.Fatal("moved desktop installation still claims ready on hosted server")
+	}
+}
+
+func TestGoogleAppReplacementPreservesConnectedCalendar(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	original := `{"client_id":"original.apps.googleusercontent.com","client_secret":"original-fixture-secret"}`
+	if got := patchGoogleSettings(t, h, original, key); got.Code != 200 {
+		t.Fatal(got.Body.String())
+	}
+	_, err := database.Exec(`INSERT INTO calendar_connections(id,user_id,provider,access_token_enc,calendar_id) SELECT 'fixture-google-connection',id,'google','encrypted-fixture','primary' FROM users LIMIT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{`{"client_id":"replacement.apps.googleusercontent.com","client_secret":"new-fixture-secret"}`, `{"client_id":""}`} {
+		got := patchGoogleSettings(t, h, body, key)
+		if got.Code != http.StatusConflict {
+			t.Fatalf("expected disconnect instruction, got %d: %s", got.Code, got.Body.String())
+		}
+	}
+	var clientID string
+	if err := database.QueryRow("SELECT google_client_id FROM server_settings WHERE id=1").Scan(&clientID); err != nil || clientID != "original.apps.googleusercontent.com" {
+		t.Fatal("rejected change altered active client")
+	}
+	if got := patchGoogleSettings(t, h, original, key); got.Code != 200 {
+		t.Fatal("same client should still allow its secret to be updated")
+	}
+	// A workspace admin can recover connections belonging to an archived member.
+	if _, err := database.Exec(`INSERT INTO users(id,name,email,iana_timezone,archived_at) VALUES('departed','Departed','departed@example.com','UTC',datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE calendar_connections SET user_id='departed',is_destination=1 WHERE provider='google'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO connection_calendars(id,user_id,provider,calendar_id) VALUES('stale-choice','departed','google','obsolete-calendar')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO calendar_connections(id,user_id,provider,access_token_enc,calendar_id,is_destination) VALUES('keep-microsoft','departed','microsoft','fixture','primary',0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO connection_calendars(id,user_id,provider,calendar_id) VALUES('keep-choice','departed','microsoft','work')`); err != nil {
+		t.Fatal(err)
+	}
+	reset := httptest.NewRecorder()
+	h.RequireAuth(h.ResetGoogleConnections)(reset, authReq("POST", "/v1/settings/google/reset-connections", "", key))
+	if reset.Code != 200 {
+		t.Fatalf("admin reset: %d %s", reset.Code, reset.Body.String())
+	}
+	var selections int
+	if err := database.QueryRow("SELECT count(*) FROM connection_calendars WHERE provider='google'").Scan(&selections); err != nil || selections != 0 {
+		t.Fatal("reset retained Google calendar selections")
+	}
+	var destination int
+	if err := database.QueryRow("SELECT is_destination FROM calendar_connections WHERE id='keep-microsoft'").Scan(&destination); err != nil || destination != 1 {
+		t.Fatal("reset did not preserve/promote remaining Microsoft destination")
+	}
+	if err := database.QueryRow("SELECT count(*) FROM connection_calendars WHERE id='keep-choice'").Scan(&selections); err != nil || selections != 1 {
+		t.Fatal("reset touched Microsoft calendar selections")
+	}
+	if got := patchGoogleSettings(t, h, `{"client_id":"replacement.apps.googleusercontent.com","client_secret":"new-fixture-secret"}`, key); got.Code != 200 {
+		t.Fatalf("replacement after reset: %d %s", got.Code, got.Body.String())
+	}
+}
+
 func TestGetGoogleSettings_unconfigured(t *testing.T) {
 	h, _, key := newGoogleHandler(t)
 	rec := getGoogleSettings(t, h, key)

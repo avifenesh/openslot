@@ -14,19 +14,19 @@ import (
 // clientForAccount builds an authorized HTTP client for one connected Google account
 // (by account email). Returns (nil, nil) when the user has no such connection.
 func (c *Client) clientForAccount(ctx context.Context, userID, accountEmail string) (*http.Client, error) {
-	var accessEnc, refreshEnc, calID, expiryStr, email string
+	var connectionID, accessEnc, refreshEnc, calID, expiryStr, email string
 	err := c.db.QueryRowContext(ctx, `
-		SELECT access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
+		SELECT id, access_token_enc, COALESCE(refresh_token_enc,''), calendar_id, COALESCE(expiry_at,''), COALESCE(account_email,'')
 		FROM calendar_connections
 		WHERE user_id = ? AND provider = 'google' AND COALESCE(account_email,'') = ?
-		LIMIT 1`, userID, accountEmail).Scan(&accessEnc, &refreshEnc, &calID, &expiryStr, &email)
+		LIMIT 1`, userID, accountEmail).Scan(&connectionID, &accessEnc, &refreshEnc, &calID, &expiryStr, &email)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("gcal: load account connection: %w", err)
 	}
-	return c.buildClient(ctx, userID, accessEnc, refreshEnc, calID, expiryStr, email)
+	return c.buildClient(ctx, userID, connectionID, accessEnc, refreshEnc, expiryStr)
 }
 
 type calListResp struct {

@@ -45,12 +45,6 @@ func runServer(cfg *config.Config) {
 	}
 	defer listener.Close()
 
-	if cfg.GoogleClientID != "" {
-		slog.Info("Google OAuth configured", "client_id_prefix", cfg.GoogleClientID[:min(20, len(cfg.GoogleClientID))])
-	} else {
-		slog.Warn("Google OAuth NOT configured — GOOGLE_CLIENT_ID is empty")
-	}
-
 	database, err := db.Open(cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("failed to open database", "error", err)
