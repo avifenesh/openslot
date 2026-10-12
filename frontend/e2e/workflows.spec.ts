@@ -329,7 +329,7 @@ test('member invite claims locally, team membership, rename, archive and restore
  try {
   await guest.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
   const member = await guest.newPage();
-  expect(new URL(invite.invite_url).origin).toBe(publicOrigin);
+  expect(new URL(invite.invite_url).origin).toBe(identityOrigin);
   await member.goto(base + new URL(invite.invite_url).pathname);
   await member.getByLabel('Full name',{exact:true}).fill('Workflow Member');
   await member.getByLabel('Password',{exact:true}).fill('Hermetic-member-password-2026');
@@ -771,9 +771,9 @@ test('Google OAuth startup rejects malformed saved and environment credentials',
   }
  };
  await loginOAuthFixture(page);
- await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
  try {
   await restart();
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
   await api(page.request,'/v1/settings/google','PATCH',{client_id:clientID,client_secret:'synthetic-startup-secret'});
   // Corrupt only the disposable DB to model settings written by an older build.
   execFileSync('python3',['-c','import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute("UPDATE server_settings SET google_client_id=? WHERE id=1",("malformed-saved-client",)); db.commit()',join(directory,'test.db')]);
