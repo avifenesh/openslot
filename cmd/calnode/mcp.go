@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -25,6 +26,10 @@ import (
 // for a local agent. The MCP JSON-RPC stream owns stdout, so all logs go to stderr.
 func runMCPStdio(_ []string) {
 	cfg := config.Load()
+	if cfg.EncryptionKey == "" {
+		fmt.Fprintln(os.Stderr, "openslot: persistent encryption key is missing; initialize or restore the configuration first")
+		os.Exit(1)
+	}
 
 	// stdout carries the MCP protocol — never log to it. All logs → stderr.
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
@@ -58,7 +63,7 @@ func runMCPStdio(_ []string) {
 	h, drain := server.BuildHandler(ctx, cfg, database, logger)
 	defer drain()
 
-	logger.Info("calnode MCP server ready (stdio transport)")
+	logger.Info("OpenSlot MCP server ready (stdio transport)")
 	if err := h.MCPServer().Run(ctx, &mcp.StdioTransport{}); err != nil {
 		logger.Error("mcp: stdio server exited with error", "error", err)
 		os.Exit(1)

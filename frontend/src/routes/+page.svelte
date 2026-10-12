@@ -29,9 +29,10 @@
 			const [cal, availability, types, bookings] = await Promise.all([
 				api.get<CalendarStatus>('/v1/calendar/status'),
 				api.get<{ items: AvailabilityRule[] }>('/v1/availability-rules'),
-				api.get<{ items: EventType[] }>('/v1/event-types'),
+				api.get<{ items: EventType[]; public_base_url?: string }>('/v1/event-types'),
 				api.get<{ items: Booking[]; counts: {upcoming: number} }>('/v1/bookings?when=upcoming&status=confirmed&order=asc&limit=4'),
 			]);
+			origin = types.public_base_url || window.location.origin;
 			calendar = cal; rules = availability.items ?? []; events = types.items ?? [];
 			meetings = bookings.items ?? []; upcoming = bookings.counts?.upcoming ?? meetings.length;
 		} catch (e) { error = e instanceof Error ? e.message : 'Could not load your workspace.'; }

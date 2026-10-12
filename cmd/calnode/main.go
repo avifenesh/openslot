@@ -12,8 +12,6 @@ import (
 	"time"
 	_ "time/tzdata" // embed IANA timezone database so scratch/distroless images work
 
-	"github.com/joho/godotenv"
-
 	"github.com/calnode/calnode/internal/buildinfo"
 	"github.com/calnode/calnode/internal/config"
 	"github.com/calnode/calnode/internal/db"
@@ -21,33 +19,9 @@ import (
 	"github.com/calnode/calnode/internal/server"
 )
 
-func main() {
-	// Subcommand dispatch.
-	if len(os.Args) > 1 {
-		_ = godotenv.Load()
-		switch os.Args[1] {
-		case "reset-admin":
-			runResetAdmin(os.Args[2:])
-			return
-		case "rotate-key":
-			runRotateKey(os.Args[2:])
-			return
-		case "recover-key":
-			runRecoverKey(os.Args[2:])
-			return
-		case "agent":
-			runAgent(os.Args[2:])
-			return
-		case "mcp":
-			runMCPStdio(os.Args[2:])
-			return
-		}
-	}
+func main() { runCLI(os.Args[1:]) }
 
-	// Load .env if present (dev convenience). Real env vars always win.
-	_ = godotenv.Load()
-
-	cfg := config.Load()
+func runServer(cfg *config.Config) {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: cfg.LogLevel,
@@ -63,6 +37,13 @@ func main() {
 		logger.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.BindHost, cfg.Port))
+	if err != nil {
+		logger.Error("cannot listen; check the port and bind address", "error", err)
+		os.Exit(1)
+	}
+	defer listener.Close()
 
 	if cfg.GoogleClientID != "" {
 		slog.Info("Google OAuth configured", "client_id_prefix", cfg.GoogleClientID[:min(20, len(cfg.GoogleClientID))])
@@ -110,16 +91,24 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(quit)
+	serveErr := make(chan error, 1)
 
 	go func() {
 		logger.Info("server listening", "port", cfg.Port, "base_url", cfg.BaseURL)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("server error", "error", err)
-			quit <- syscall.SIGTERM // triggers graceful shutdown so deferred db.Close() runs
+		logger.Info("open your scheduling workspace", "url", strings.TrimRight(cfg.BaseURL, "/")+"/admin/")
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+			serveErr <- err
 		}
 	}()
 
-	<-quit
+	select {
+	case <-quit:
+	case err := <-serveErr:
+		workerCancel()
+		logger.Error("server stopped unexpectedly", "error", err)
+		os.Exit(1)
+	}
 	logger.Info("shutting down — draining worker and in-flight requests")
 
 	// Stop the worker's ticker loop and drain the HTTP server concurrently so a

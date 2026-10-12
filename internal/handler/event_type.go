@@ -412,7 +412,7 @@ func (h *Handler) ListEventTypes(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	h.writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": items, "public_base_url": strings.TrimRight(h.publicURL(), "/")})
 }
 
 // GetEventType handles GET /v1/event-types/{slug}.

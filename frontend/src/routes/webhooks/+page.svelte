@@ -270,13 +270,13 @@
 							<td class="px-4 py-3 text-muted-foreground">{fmtDate(wh.created_at)}</td>
 							<td class="px-4 py-3 text-right whitespace-nowrap">
 								<Tooltip.Root>
-									<Tooltip.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })} onclick={() => toggleDeliveries(wh.id)}>
+									<Tooltip.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={openDeliveries === wh.id ? 'Hide deliveries' : 'Recent deliveries'} onclick={() => toggleDeliveries(wh.id)}>
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
 									</Tooltip.Trigger>
 									<Tooltip.Content>{openDeliveries === wh.id ? 'Hide deliveries' : 'Recent deliveries'}</Tooltip.Content>
 								</Tooltip.Root>
 								<Tooltip.Root>
-									<Tooltip.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })} onclick={() => del(wh.id)}>
+									<Tooltip.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Delete webhook" onclick={() => del(wh.id)}>
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
 									</Tooltip.Trigger>
 									<Tooltip.Content>Delete webhook</Tooltip.Content>

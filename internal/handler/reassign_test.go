@@ -83,6 +83,7 @@ func TestListUserUpcomingBookings_returnsHostedUpcoming(t *testing.T) {
 	h, database, ownerKey, _ := setupWorkspaceWithDB(t)
 	database.Exec(`INSERT INTO users (id,email,name,iana_timezone,is_admin) VALUES ('u2','h2@example.com','Host2','UTC',0)`)
 	database.Exec(`INSERT INTO event_types (id,user_id,slug,name,duration_minutes) VALUES ('et1','u2','et-slug','Intro',30)`)
+	database.Exec(`INSERT INTO users (id,email,name,iana_timezone) VALUES ('u3','secondary@example.com','Secondary','UTC')`)
 	// One upcoming, one past, one cancelled — only the upcoming should appear.
 	database.Exec(`INSERT INTO bookings (id,event_type_id,host_id,start_at,end_at,status)
 		VALUES ('b1','et1','u2','2099-01-01T10:00:00Z','2099-01-01T10:30:00Z','confirmed')`)
@@ -107,4 +108,22 @@ func TestListUserUpcomingBookings_returnsHostedUpcoming(t *testing.T) {
 	if len(resp.Items) != 1 || resp.Items[0].ID != "b1" {
 		t.Errorf("expected only upcoming b1; got %+v", resp.Items)
 	}
+	database.Exec(`INSERT INTO booking_hosts (id,booking_id,user_id,is_primary) VALUES ('secondary-seat','b1','u3',0)`)
+	secondaryReq := authReq(http.MethodGet, "/v1/users/u3/upcoming-bookings", "", ownerKey)
+	secondaryReq.SetPathValue("id", "u3")
+	secondaryRec := httptest.NewRecorder()
+	h.RequireAuth(h.ListUserUpcomingBookings)(secondaryRec, secondaryReq)
+	var secondary struct {
+		Items []struct {
+			ID        string `json:"id"`
+			IsPrimary bool   `json:"is_primary"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(secondaryRec.Body.Bytes(), &secondary); err != nil {
+		t.Fatal(err)
+	}
+	if secondaryRec.Code != http.StatusOK || len(secondary.Items) != 1 || secondary.Items[0].ID != "b1" || secondary.Items[0].IsPrimary {
+		t.Fatalf("secondary host missing or incorrectly classified: %s", secondaryRec.Body.String())
+	}
+
 }

@@ -1,0 +1,11 @@
+OpenSlot
+
+This product includes code from Calnode:
+https://github.com/Calnode/calnode
+
+The OpenSlot fork started from Calnode revision
+9502e61ecf1b6c89014adc069d71743c50cdf68f.
+
+Calnode's Apache License 2.0 is preserved in LICENSE. See FORK.md for
+provenance and the OpenSlot modifications, and TRADEMARK.md for the
+upstream naming policy. OpenSlot is an independent modified distribution.

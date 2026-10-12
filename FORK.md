@@ -15,6 +15,8 @@ The Go module path remains `github.com/calnode/calnode` to preserve internal imp
 
 Inherited optional capabilities, including video, payments, and a built-in model integration, remain in the source. The main OpenSlot experience focuses on deterministic scheduling and connecting an existing external agent. No model credentials are required. Advanced integration code retained from upstream does not imply it was qualified against real external accounts in this fork.
 
-This repository has not published an OpenSlot container or hosted service. Upstream release images and deployment links retained in historical documentation refer to Calnode, not OpenSlot. Build this source to run these changes.
+This repository has not published an OpenSlot container or hosted service. Upstream release images and deployment links retained in historical documentation refer to Calnode, not OpenSlot. Install the standalone executable from the OpenSlot release assets or build this source.
 
-Upstream GitHub workflows and Dependabot scheduling are archived in `.github/upstream-workflows/` and cannot run there. The replacement workflow only checks formatting and builds on a self-hosted runner. GitHub Actions is disabled in the initial private repository until a runner is attached. Full local checks are the initial validation record.
+Upstream GitHub workflows and Dependabot scheduling are archived in `.github/upstream-workflows/` and cannot run there. The replacement workflow only checks formatting and builds on a self-hosted runner. GitHub Actions requires an attached self-hosted runner. Local checks and native executable validation are recorded in [the validation report](docs/validation.md).
+
+OpenSlot also adds persistent first-run configuration, a checksum-verifying installer, Linux service management, and executable health/version commands. Dependency notices are included in each release and embedded in `openslot licenses`.

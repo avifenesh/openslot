@@ -297,7 +297,7 @@
 			<Dialog.Title>Resolve {resolveMember?.name}'s upcoming meetings</Dialog.Title>
 			<Dialog.Description>
 				{resolveBookings.length} upcoming meeting{resolveBookings.length === 1 ? '' : 's'} remaining.
-				Reassign each to another member or cancel it. When all are resolved, the member is archived automatically.
+				Reassign meetings they lead, or cancel a meeting for all participants. When all are resolved, the member is archived automatically.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -315,24 +315,28 @@
 						</p>
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
-						<Select.Root
-							type="single"
-							value={resolveChoice[b.id] ?? ''}
-							onValueChange={(v) => { resolveChoice = { ...resolveChoice, [b.id]: v ?? '' }; }}
-							disabled={resolveBusy || reassignTargets.length === 0}
-						>
-							<Select.Trigger class="w-fit min-w-40">
-								{reassignTargets.find((t) => t.id === resolveChoice[b.id])?.name ?? 'Reassign to…'}
-							</Select.Trigger>
-							<Select.Content>
-								{#each reassignTargets as t}
-									<Select.Item value={t.id} label={t.name}>{t.name}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-						<Button size="sm" variant="outline" class="h-8" disabled={resolveBusy || !resolveChoice[b.id]} onclick={() => reassignOne(b.id)}>
-							Reassign
-						</Button>
+						{#if b.is_primary}
+							<Select.Root
+								type="single"
+								value={resolveChoice[b.id] ?? ''}
+								onValueChange={(v) => { resolveChoice = { ...resolveChoice, [b.id]: v ?? '' }; }}
+								disabled={resolveBusy || reassignTargets.length === 0}
+							>
+								<Select.Trigger class="w-fit min-w-40">
+									{reassignTargets.find((t) => t.id === resolveChoice[b.id])?.name ?? 'Reassign to…'}
+								</Select.Trigger>
+								<Select.Content>
+									{#each reassignTargets as t}
+										<Select.Item value={t.id} label={t.name}>{t.name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+							<Button size="sm" variant="outline" class="h-8" disabled={resolveBusy || !resolveChoice[b.id]} onclick={() => reassignOne(b.id)}>
+								Reassign
+							</Button>
+						{:else}
+							<p class="text-xs text-muted-foreground">Additional host. This meeting must be cancelled before archiving.</p>
+						{/if}
 						<Button size="sm" variant="ghost" class="h-8 text-destructive hover:text-destructive" disabled={resolveBusy} onclick={() => cancelOne(b.id)}>
 							Cancel meeting
 						</Button>
