@@ -587,3 +587,210 @@ test('logout, invalid login, reset and invite error states are clear without mai
  await expect(page.getByText(/invalid|expired/i)).toBeVisible();
  await screenshot(page,'invalid-invite-mobile-ready');
 });
+
+async function loginOAuthFixture(page:Page) {
+ // The preceding logout workflow invalidates its session in a full suite run.
+ await api(page.request,'/v1/auth/login/email','POST',{email:'owner@example.test',password:'Hermetic-test-password-2026'});
+}
+
+test('Google OAuth rejects incomplete or malformed pairs without replacing active credentials', async ({page}) => {
+ await loginOAuthFixture(page);
+ const clientID = 'fixture.apps.googleusercontent.com';
+ const settings = '/v1/settings/google';
+ const storedPair = () => execFileSync('python3', ['-c', 'import sqlite3,sys,json; db=sqlite3.connect(sys.argv[1]); print(json.dumps(db.execute("SELECT google_client_id,google_client_secret_enc FROM server_settings WHERE id=1").fetchone()))', join(directory,'test.db')], {encoding:'utf8'});
+ await api(page.request,settings,'PATCH',{client_id:''});
+ try {
+  const missing = await page.request.patch(base+settings,{data:{client_id:clientID}});
+  expect(missing.status(),await missing.text()).toBe(400);
+  expect(await api(page.request,settings)).toMatchObject({client_id:'',configured:false,client_secret_set:false,configuration_error:expect.any(String)});
+  const valid = await api(page.request,settings,'PATCH',{client_id:clientID,client_secret:'synthetic-secret-never-sent-to-google'});
+  expect(valid).toMatchObject({client_id:clientID,configured:true,client_secret_set:true,configuration_error:''});
+  expect(valid).not.toHaveProperty('client_secret');
+  const originalPair = storedPair();
+  for (const invalid of [
+   {client_id:'not-a-google-client',client_secret:'synthetic-replacement'},
+   {client_id:'https://fixture.apps.googleusercontent.com',client_secret:'synthetic-replacement'},
+   {client_id:'changed.apps.googleusercontent.com'},
+   {client_id:'changed.apps.googleusercontent.com',client_secret:'   '},
+  ]) {
+   const rejected = await page.request.patch(base+settings,{data:invalid});
+   expect(rejected.status(),await rejected.text()).toBe(400);
+   expect(await api(page.request,settings)).toEqual(valid);
+   // Compare ciphertext as well as public settings, without writing the secret to evidence.
+   expect(storedPair()===originalPair,'the stored client ID and encrypted secret remain intact').toBe(true);
+   const redirect = await page.request.get(base+'/v1/calendar/connect?provider=google',{maxRedirects:0});
+   expect(redirect.status()).toBe(302);
+   const target = new URL(redirect.headers().location);
+   expect(target.hostname).toBe('accounts.google.com');
+   expect(target.searchParams.get('client_id')).toBe(clientID);
+  }
+  expect(await api(page.request,settings,'PATCH',{client_id:clientID,client_secret:''})).toEqual(valid);
+  expect(storedPair()===originalPair,'saving the same ID retains its encrypted secret').toBe(true);
+ } finally {
+  await api(page.request,settings,'PATCH',{client_id:''});
+ }
+ expect(await api(page.request,settings)).toMatchObject({client_id:'',configured:false,client_secret_set:false});
+ expect((await api(page.request,'/v1/calendar/status')).providers??[]).not.toContain('google');
+ expect((await api(page.request,'/v1/apps')).gmail_oauth_configured).toBe(false);
+});
+
+test('Google OAuth Apps and Settings links open isolated Google login with the correct callbacks', async ({page}) => {
+ await loginOAuthFixture(page);
+ const clientID = 'fixture.apps.googleusercontent.com';
+ const consoleErrors: string[] = [];
+ const navigations: {path:string;clientID:string|null;callback:string|null;scopes:string[]}[] = [];
+ const initialRuntimeErrors = runtimeErrors.length;
+ const initialBlockedRequests = blockedRequests.length;
+ page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
+ // Page routing takes precedence over the existing context network block. Fulfill
+ // only the expected Google navigation; no Google request leaves this browser.
+ await page.route('https://accounts.google.com/**',async route=>{
+  expect(route.request().isNavigationRequest()).toBe(true);
+  const target = new URL(route.request().url());
+  navigations.push({path:target.pathname,clientID:target.searchParams.get('client_id'),callback:target.searchParams.get('redirect_uri'),scopes:(target.searchParams.get('scope')??'').split(' ')});
+  await route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><title>Isolated OAuth fixture</title></head><body><h1>Synthetic Google login</h1></body></html>'});
+ });
+ // Playwright does not route subsequent requests in an HTTP redirect chain.
+ // Fetch the real local 302 without following it, then turn its Location into a
+ // fresh browser navigation so the Google fixture above intercepts it reliably.
+ for(const endpoint of ['/v1/calendar/connect?provider=google','/v1/apps/gmail/connect']) {
+  await page.route(base+endpoint,async route=>{
+   const response = await route.fetch({maxRedirects:0});
+   expect(response.status()).toBe(302);
+   const location = response.headers().location;
+   expect(new URL(location).origin).toBe('https://accounts.google.com');
+   await route.fulfill({status:200,contentType:'text/html',body:`<!doctype html><script>location.replace(${JSON.stringify(location).replace(/</g,'\\u003c')})</script>`});
+  });
+ }
+ const card = (name:string) => page.locator('section').filter({has:page.getByRole('heading',{name,exact:true})});
+ const openLogin = async (link:ReturnType<Page['getByRole']>, callback:string, gmail=false) => {
+  const before = navigations.length;
+  await expect(link).toHaveAttribute('data-sveltekit-reload',/^(true)?$/);
+  await link.click();
+  await expect(page.getByRole('heading',{name:'Synthetic Google login',exact:true})).toBeVisible();
+  expect(navigations).toHaveLength(before+1);
+  const target = new URL(page.url());
+  expect(target.hostname).toBe('accounts.google.com');
+  expect(target.searchParams.get('client_id')).toBe(clientID);
+  expect(target.searchParams.get('redirect_uri')).toBe(publicOrigin+callback);
+  expect(target.searchParams.get('response_type')).toBe('code');
+  expect(target.searchParams.get('state')).toBeTruthy();
+  if(gmail)expect(navigations.at(-1)?.scopes).toEqual(expect.arrayContaining(['https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/gmail.send']));
+ };
+ await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+ try {
+  await page.goto(base+'/admin/apps');
+  for(const name of ['Google Calendar','Gmail']) {
+   const setup = card(name).getByRole('link',{name:'Set up Google OAuth',exact:true});
+   await expect(setup).toHaveAttribute('href','/admin/settings/google');
+   await setup.click();
+   await expect(page).toHaveURL(base+'/admin/settings/google');
+   await expect(page.getByLabel('Client ID',{exact:true})).toBeVisible();
+   await page.goto(base+'/admin/apps');
+  }
+  await page.goto(base+'/admin/settings/google');
+  const form = page.locator('div').filter({has:page.getByRole('heading',{name:'Google OAuth',exact:true})}).filter({has:page.getByLabel('Client ID',{exact:true})}).last();
+  await form.getByLabel('Client ID',{exact:true}).fill(clientID);
+  await form.getByLabel('Client Secret',{exact:true}).fill('synthetic-secret-never-sent-to-google');
+  const savedResponse = page.waitForResponse(r=>r.url()===base+'/v1/settings/google'&&r.request().method()==='PATCH');
+  await form.getByRole('button',{name:'Save',exact:true}).click();
+  expect((await savedResponse).status()).toBe(200);
+  await expect(page.getByText('Credentials saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Configured',{exact:true})).toHaveCount(0);
+  await expect(form.getByLabel('Client Secret',{exact:true})).toHaveValue('');
+  expect(await api(page.request,'/v1/settings/google')).toMatchObject({configured:true,configuration_error:'',client_id:clientID});
+  for(const width of [1023,390]) {
+   await page.setViewportSize({width,height:991});
+   for(const value of ['light','dark'] as const) {
+    await page.goto(base+'/admin/settings/google');
+    await expect(page.getByText('Credentials saved',{exact:true})).toBeVisible();
+    await theme(page,value,width===390);
+    await expect(page.getByRole('link',{name:'Connect Google Calendar',exact:true})).toHaveAttribute('href','/v1/calendar/connect?provider=google');
+    await expect(page.getByRole('link',{name:'Connect Gmail',exact:true})).toHaveAttribute('href','/v1/apps/gmail/connect');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({path:join(artifacts,`oauth-settings-${width}-${value}.png`),fullPage:true,animations:'disabled',mask:[page.locator('[data-sensitive]')]});
+    await page.goto(base+'/admin/apps');
+    await expect(card('Google Calendar').getByRole('link',{name:'Connect calendar',exact:true})).toHaveAttribute('href','/v1/calendar/connect?provider=google');
+    await expect(card('Gmail').getByRole('link',{name:'Connect Gmail',exact:true})).toHaveAttribute('href','/v1/apps/gmail/connect');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({path:join(artifacts,`oauth-apps-${width}-${value}.png`),fullPage:true,animations:'disabled',mask:[page.locator('[data-sensitive]')]});
+   }
+  }
+  await page.goto(base+'/admin/apps');
+  await openLogin(card('Google Calendar').getByRole('link',{name:'Connect calendar',exact:true}),'/v1/calendar/callback');
+  await page.goto(base+'/admin/apps');
+  await openLogin(card('Gmail').getByRole('link',{name:'Connect Gmail',exact:true}),'/v1/apps/gmail/callback',true);
+  await page.goto(base+'/admin/settings/google');
+  await openLogin(page.getByRole('link',{name:'Connect Google Calendar',exact:true}),'/v1/calendar/callback');
+  await page.goto(base+'/admin/settings/google');
+  await openLogin(page.getByRole('link',{name:'Connect Gmail',exact:true}),'/v1/apps/gmail/callback',true);
+  await writeFile(join(artifacts,'oauth-navigation.json'),JSON.stringify({navigations,consoleErrors,googleRequestsFulfilledLocally:navigations.length},null,2));
+  expect(consoleErrors).toEqual([]);
+  expect(runtimeErrors.slice(initialRuntimeErrors)).toEqual([]);
+  expect(blockedRequests.slice(initialBlockedRequests)).toEqual([]);
+ } finally {
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+ }
+});
+
+test('Google OAuth startup rejects malformed saved and environment credentials', async ({page}) => {
+ const clientID = 'fixture.apps.googleusercontent.com';
+ // Keep the fixture's generated key across restarts so its disposable keyvault
+ // remains readable. This child was spawned with the fixture's whitelist only.
+ const {readFile} = await import('node:fs/promises');
+ const fixtureEnv = (await readFile(`/proc/${child.pid}/environ`,'utf8')).split('\0');
+ const encryptionKey = fixtureEnv.find(value=>value.startsWith('CALNODE_ENCRYPTION_KEY='))?.slice('CALNODE_ENCRYPTION_KEY='.length);
+ expect(encryptionKey,'the synthetic child has its generated encryption key').toBeTruthy();
+ const restart = async (googleEnv:Record<string,string>={}) => {
+  if(child.exitCode===null)await new Promise<void>(res=>{
+   const timer=setTimeout(()=>child.kill('SIGKILL'),10_000);
+   child.once('exit',()=>{clearTimeout(timer);res();});child.kill('SIGTERM');
+  });
+  child=spawn(resolve(process.env.OPENSLOT_TEST_BINARY??'../openslot'),[],{
+   cwd:directory,stdio:['ignore',log,log],
+   env:{PATH:process.env.PATH,HOME:directory,GOMAXPROCS:'2',TMPDIR:process.env.TMPDIR,PORT:new URL(base).port,BIND_HOST:'127.0.0.1',BASE_URL:publicOrigin,COOKIE_SECURE:'false',DATABASE_URL:`sqlite://${join(directory,'test.db')}`,DATA_DIR:join(directory,'uploads'),CALNODE_ENCRYPTION_KEY:encryptionKey,CALNODE_RECOVERY_SECRET:randomBytes(32).toString('hex'),LOG_LEVEL:'error',...googleEnv},
+  });
+  await expect.poll(async()=>{
+   if(child.exitCode!==null)throw new Error(`Synthetic OAuth server exited: ${child.exitCode}`);
+   try{return(await page.request.get(base+'/v1/auth/status')).status();}catch{return 0;}
+  },{timeout:30_000}).toBe(200);
+  await loginOAuthFixture(page);
+ };
+ const assertDisabled = async () => {
+  expect(await api(page.request,'/v1/settings/google')).toMatchObject({configured:false,configuration_error:expect.stringMatching(/\S/)});
+  expect((await api(page.request,'/v1/calendar/status')).providers??[]).not.toContain('google');
+  expect((await api(page.request,'/v1/apps')).gmail_oauth_configured).toBe(false);
+  await page.goto(base+'/admin/apps');
+  for(const name of ['Google Calendar','Gmail'])await expect(page.locator('section').filter({has:page.getByRole('heading',{name,exact:true})}).getByRole('link',{name:'Set up Google OAuth',exact:true})).toHaveAttribute('href','/admin/settings/google');
+  for(const endpoint of ['/v1/calendar/connect?provider=google','/v1/apps/gmail/connect']) {
+   const blocked=await page.request.get(base+endpoint,{maxRedirects:0});
+   expect(blocked.status()).toBeGreaterThanOrEqual(400);
+   expect(blocked.headers().location).toBeUndefined();
+  }
+ };
+ await loginOAuthFixture(page);
+ await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+ try {
+  await restart();
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:clientID,client_secret:'synthetic-startup-secret'});
+  // Corrupt only the disposable DB to model settings written by an older build.
+  execFileSync('python3',['-c','import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute("UPDATE server_settings SET google_client_id=? WHERE id=1",("malformed-saved-client",)); db.commit()',join(directory,'test.db')]);
+  await restart();
+  await assertDisabled();
+  await page.goto(base+'/admin/settings/google');
+  await expect(page.getByRole('alert')).toContainText('Google setup needs attention');
+  await expect(page.getByRole('link',{name:'Connect Google Calendar',exact:true})).toHaveCount(0);
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+  execFileSync('python3',['-c','import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute("UPDATE server_settings SET google_client_id=? WHERE id=1",(sys.argv[2],)); db.commit()',join(directory,'test.db'),clientID]);
+  await restart();
+  await assertDisabled();
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+  for(const googleEnv of [{GOOGLE_CLIENT_ID:'malformed-env-client',GOOGLE_CLIENT_SECRET:'synthetic-env-secret'},{GOOGLE_CLIENT_ID:clientID,GOOGLE_CLIENT_SECRET:''}]) {
+   await restart(googleEnv);
+   await assertDisabled();
+  }
+ } finally {
+  await api(page.request,'/v1/settings/google','PATCH',{client_id:''});
+  await restart();
+ }
+});
