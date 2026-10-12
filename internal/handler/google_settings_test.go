@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/calnode/calnode/internal/caldav"
+	"github.com/calnode/calnode/internal/calendar"
+	"github.com/calnode/calnode/internal/calendar/microsoft"
 	"github.com/calnode/calnode/internal/handler"
+	"github.com/calnode/calnode/internal/mailer"
 )
 
 // newGoogleHandler sets up a handler with a valid enc key and returns it
@@ -398,4 +403,86 @@ func containsStr(s, sub string) bool {
 
 func strReader(s string) *strings.Reader {
 	return strings.NewReader(s)
+}
+
+func TestGoogleSettingsPreserveOtherCalendarProviders(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	existing := calendar.NewService(database)
+	dav, err := caldav.New(database, testGCalKeyHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing.Register(dav)
+	ms, err := microsoft.New(database, "test-ms", "test-secret", "common", "http://localhost:3000/v1/calendar/callback", testGCalKeyHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing.Register(ms)
+	h.SetCalendar(existing)
+	for _, body := range []string{`{"client_id":"new-google-client","client_secret":"test-secret"}`, `{"client_id":""}`} {
+		rec := httptest.NewRecorder()
+		h.RequireAuth(h.PatchGoogleSettings)(rec, authReq(http.MethodPatch, "/v1/settings/google", body, key))
+		if rec.Code != 200 {
+			t.Fatalf("save Google settings: %d %s", rec.Code, rec.Body)
+		}
+		status := httptest.NewRecorder()
+		h.RequireAuth(h.CalendarStatus)(status, authReq(http.MethodGet, "/v1/calendar/status", "", key))
+		if status.Code != 200 || !strings.Contains(status.Body.String(), `"caldav"`) || !strings.Contains(status.Body.String(), `"microsoft"`) {
+			t.Fatalf("Google settings removed another provider: %d %s", status.Code, status.Body)
+		}
+	}
+	var userID string
+	if err := database.QueryRow("SELECT id FROM users LIMIT 1").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	state, err := ms.EncryptState("microsoft\x1f" + userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := httptest.NewRecorder()
+	h.CalendarCallback(callback, httptest.NewRequest(http.MethodGet, "/v1/calendar/callback?state="+url.QueryEscape(state), nil))
+	if callback.Code != 400 || !strings.Contains(callback.Body.String(), "missing code") {
+		t.Fatalf("Microsoft OAuth state stopped routing after Google removal: %d %s", callback.Code, callback.Body)
+	}
+}
+
+func TestGoogleSettingsPreserveEnvironmentSecretOnSave(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	h.SetGoogleAuth("environment-client", "environment-secret", "http://localhost:3000/v1/auth/callback", false)
+	rec := getGoogleSettings(t, h, key)
+	if !strings.Contains(rec.Body.String(), `"client_id":"environment-client"`) || !strings.Contains(rec.Body.String(), `"client_secret_set":true`) {
+		t.Fatal("active environment configuration is hidden")
+	}
+	saved := httptest.NewRecorder()
+	h.RequireAuth(h.PatchGoogleSettings)(saved, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"environment-client"}`, key))
+	if saved.Code != 200 {
+		t.Fatalf("save: %d", saved.Code)
+	}
+	var encoded string
+	if err := database.QueryRow("SELECT google_client_secret_enc FROM server_settings WHERE id=1").Scan(&encoded); err != nil || encoded == "" {
+		t.Fatal("saving lost the environment-sourced secret")
+	}
+	if strings.Contains(saved.Body.String(), "environment-secret") {
+		t.Fatal("secret exposed in response")
+	}
+}
+
+func TestGoogleSettingsDropsGmailWhenPreviousOAuthIsMissing(t *testing.T) {
+	h, database, key := newGoogleHandler(t)
+	var userID string
+	database.QueryRow("SELECT id FROM users LIMIT 1").Scan(&userID)
+	if _, err := database.Exec("INSERT INTO app_integrations(provider,generation,credentials_enc,config,connected_by,connected_at) VALUES('gmail','old','old-cipher','{}',?,'2026-10-12T00:00:00Z')", userID); err != nil {
+		t.Fatal(err)
+	}
+	h.InitAppConnectors(mailer.NewLive(&mailer.Noop{}))
+	rec := httptest.NewRecorder()
+	h.RequireAuth(h.PatchGoogleSettings)(rec, authReq(http.MethodPatch, "/v1/settings/google", `{"client_id":"new-client","client_secret":"new-secret"}`, key))
+	if rec.Code != 200 {
+		t.Fatalf("save: %d", rec.Code)
+	}
+	var remaining int
+	database.QueryRow("SELECT COUNT(*) FROM app_integrations WHERE provider='gmail'").Scan(&remaining)
+	if remaining != 0 {
+		t.Fatal("stale Gmail credentials survived an unknown previous OAuth configuration")
+	}
 }

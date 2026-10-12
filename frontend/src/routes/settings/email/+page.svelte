@@ -152,7 +152,7 @@
 				{#if emailSettings !== null}
 					<span class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium {emailSettings.enabled ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}">
 						<span class="h-1.5 w-1.5 rounded-full {emailSettings.enabled ? 'bg-green-500' : 'bg-amber-400'}"></span>
-						{emailSettings.transport === 'resend_api'
+						{emailSettings.active_transport === 'gmail_api' ? 'Sending via Gmail' : emailSettings.transport === 'resend_api'
 							? 'Sending via Resend API'
 							: emailSettings.transport === 'smtp'
 								? 'Sending via SMTP'
@@ -161,6 +161,7 @@
 				{/if}
 			</div>
 
+			{#if emailSettings?.active_transport === 'gmail_api'}<p class="mb-4 text-sm text-muted-foreground">Gmail is the active workspace sender. These settings configure the fallback used after you disconnect Gmail in App connections.</p>{/if}
 			<div class="space-y-4">
 				<div class="space-y-2 rounded-md border p-3">
 					<div class="flex items-center justify-between gap-4">
@@ -263,7 +264,7 @@
 				<Button onclick={save} disabled={savingFlag.active}>
 					{savingFlag.active ? 'Saving…' : 'Save'}
 				</Button>
-				<Button variant="outline" onclick={test} disabled={testingFlag.active || !emailSettings?.enabled}>
+				<Button variant="outline" onclick={test} disabled={testingFlag.active || !emailSettings || emailSettings.transport === 'none'}>
 					{testingFlag.active ? 'Sending…' : 'Send test email'}
 				</Button>
 			</div>

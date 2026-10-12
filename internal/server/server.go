@@ -117,6 +117,8 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 	}
 
 	h.SetMailer(live, cfg.BaseURL)
+	apps := h.InitAppConnectors(live)
+	h.SetMailer(apps, cfg.BaseURL)
 
 	drain := func() {}
 	whs, err := webhook.New(db, cfg.EncryptionKey)
@@ -125,8 +127,9 @@ func BuildHandler(ctx context.Context, cfg *config.Config, db *sql.DB, logger *s
 	} else {
 		h.SetWebhookSvc(whs)
 		// Pass live so the worker picks up SMTP changes automatically.
-		wrk := worker.New(db, whs, logger, worker.WithMailer(live))
+		wrk := worker.New(db, whs, logger, worker.WithMailer(apps))
 		// Notetaker jobs live in the handler package (they need LLM/S3/encKey).
+		wrk.RegisterHandler("notion.sync", apps.SyncNotion)
 		wrk.RegisterHandler("notetaker.transcribe", h.JobNotetakerTranscribe)
 		wrk.RegisterHandler("notetaker.summarize", h.JobNotetakerSummarize)
 		go wrk.Run(ctx)
@@ -523,6 +526,14 @@ func New(ctx context.Context, cfg *config.Config, db *sql.DB, logger *slog.Logge
 	mux.HandleFunc("POST /v1/email/inbound/resend", h.InboundEmailResend)
 
 	// API keys
+	mux.HandleFunc("GET /v1/apps", h.RequireAuth(h.AppConnections))
+	mux.HandleFunc("GET /v1/apps/gmail/connect", h.RequireAuth(h.ConnectGmail))
+	mux.HandleFunc("GET /v1/apps/gmail/callback", h.RequireAuth(h.GmailCallback))
+	mux.HandleFunc("PUT /v1/apps/notion", h.RequireAuth(h.ConnectNotion))
+	mux.HandleFunc("POST /v1/apps/notion/sync", h.RequireAuth(h.SyncNotionBookings))
+	mux.HandleFunc("POST /v1/apps/{provider}/check", h.RequireAuth(h.CheckAppConnection))
+	mux.HandleFunc("DELETE /v1/apps/{provider}", h.RequireAuth(h.DisconnectApp))
+	mux.HandleFunc("GET /v1/agent-connectors", h.RequireAuth(h.AgentConnectors))
 	mux.HandleFunc("GET /v1/api-keys", h.RequireAuth(h.ListAPIKeys))
 	mux.HandleFunc("POST /v1/api-keys", h.RequireAuth(h.CreateAPIKey))
 	mux.HandleFunc("DELETE /v1/api-keys/{id}", h.RequireAuth(h.DeleteAPIKey))

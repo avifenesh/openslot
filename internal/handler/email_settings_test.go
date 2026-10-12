@@ -1,9 +1,11 @@
 package handler_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -293,5 +295,27 @@ func TestTestEmailConnection_nonAdminForbidden(t *testing.T) {
 	h.RequireAuth(h.TestEmailConnection)(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("non-admin test-email: got %d; want 403", rec.Code)
+	}
+}
+
+type settingsTransportProbeMailer struct {
+	calls int
+	err   error
+}
+
+func (m *settingsTransportProbeMailer) Send(context.Context, mailer.Message) error {
+	m.calls++
+	return m.err
+}
+func TestEmailSettingsTestUsesConfiguredFallback(t *testing.T) {
+	h, _, key, _ := setupWorkspaceWithDB(t)
+	fallback := &settingsTransportProbeMailer{err: errors.New("configured transport failed")}
+	active := &settingsTransportProbeMailer{}
+	h.SetMailer(mailer.NewLive(fallback), "http://localhost")
+	h.SetMailer(active, "http://localhost")
+	rec := httptest.NewRecorder()
+	h.RequireAuth(h.TestEmailConnection)(rec, authReq(http.MethodPost, "/v1/settings/email/test", "", key))
+	if rec.Code != http.StatusInternalServerError || fallback.calls != 1 || active.calls != 0 {
+		t.Fatalf("settings test used wrong sender: status=%d fallback=%d active=%d", rec.Code, fallback.calls, active.calls)
 	}
 }

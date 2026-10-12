@@ -460,3 +460,43 @@ func TestWorker_skipsJobForDeletedWebhook(t *testing.T) {
 		t.Errorf("job status = %q; want done (skipped silently)", jobStatus)
 	}
 }
+
+type connectorRetry struct {
+	at        time.Time
+	attempted bool
+}
+
+func (e connectorRetry) Error() string          { return "provider asked to retry later" }
+func (e connectorRetry) RetryAt() time.Time     { return e.at }
+func (e connectorRetry) RequestAttempted() bool { return e.attempted }
+func TestWorkerConnectorRetrySchedule(t *testing.T) {
+	for _, attempted := range []bool{true, false} {
+		t.Run(map[bool]string{true: "provider-response", false: "waiting-for-cooldown"}[attempted], func(t *testing.T) {
+			database, svc := setup(t)
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			w := worker.New(database, svc, logger)
+			retryAt := time.Now().UTC().Add(3 * time.Minute).Truncate(time.Second)
+			w.RegisterHandler("connector.retry", func(context.Context, string) error { return connectorRetry{at: retryAt, attempted: attempted} })
+			if _, err := database.Exec("INSERT INTO jobs(id,type,payload,run_at) VALUES('retry','connector.retry','{}',?)", time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)); err != nil {
+				t.Fatal(err)
+			}
+			w.Poll(t.Context())
+			var when, status string
+			var attempts int
+			if err := database.QueryRow("SELECT run_at,status,attempts FROM jobs WHERE id='retry'").Scan(&when, &status, &attempts); err != nil {
+				t.Fatal(err)
+			}
+			scheduled, err := time.Parse(time.RFC3339, when)
+			if err != nil || scheduled.Before(retryAt) || status != "pending" {
+				t.Fatalf("provider retry deadline ignored: %s %s", when, status)
+			}
+			expected := 0
+			if attempted {
+				expected = 1
+			}
+			if attempts != expected {
+				t.Fatalf("attempt count=%d, want %d", attempts, expected)
+			}
+		})
+	}
+}

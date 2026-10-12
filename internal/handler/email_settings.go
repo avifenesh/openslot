@@ -154,9 +154,15 @@ func (h *Handler) GetEmailSettings(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	// Report the transport the same way BuildMailer decides it, so the UI cannot claim one
-	// path while another is delivering. Secrets are never returned, only whether they exist.
+	// Keep the configured fallback transport and report the active sender separately.
+	// Secrets are never returned, only whether they exist.
 	_, transport := BuildMailer(SMTPConfig{Host: host, ResendAPIKey: resendEnc})
+	activeTransport := string(transport)
+	if h.apps != nil {
+		if gmail, err := h.apps.Status(r.Context(), "gmail"); err == nil && gmail.Connected {
+			activeTransport = "gmail_api"
+		}
+	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"smtp_host":          host,
 		"smtp_port":          port,
@@ -168,6 +174,7 @@ func (h *Handler) GetEmailSettings(w http.ResponseWriter, r *http.Request) {
 		"email_from_name":    fromName,
 		"resend_api_key_set": resendEnc != "",
 		"transport":          string(transport),
+		"active_transport":   activeTransport,
 		"enabled":            h.isEmailEnabled(),
 		// RSVP tracking for OpenSlot-sent invites (Resend inbound). Active only with all
 		// three of the address, the webhook secret and a Resend API key.
@@ -449,9 +456,15 @@ func (h *Handler) TestEmailConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.isEmailEnabled() {
+	enabled := h.isEmailEnabled()
+	sender := h.mailer
+	if h.live != nil {
+		sender = h.live
+		enabled = h.live.IsEnabled()
+	}
+	if !enabled {
 		h.writeError(w, http.StatusServiceUnavailable,
-			"Email is not configured — save SMTP settings first")
+			"Configure an SMTP or Resend sender before testing it here. Gmail has a separate check in App connections.")
 		return
 	}
 	// Bound this well under the default send timeout. This endpoint is interactive: an
@@ -468,7 +481,7 @@ func (h *Handler) TestEmailConnection(w http.ResponseWriter, r *http.Request) {
 		_, transport = BuildMailer(*cfg)
 	}
 
-	if err := h.mailer.Send(ctx, mailer.Message{
+	if err := sender.Send(ctx, mailer.Message{
 		To:      []string{user.Email},
 		Subject: "[TEST] OpenSlot email configuration",
 		Text:    "This is a test email from OpenSlot. If you received this, your email settings are working correctly.",

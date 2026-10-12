@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type BrowserContext, type Page } 
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createServer as createSocketServer } from 'node:net';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { openSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -20,6 +20,8 @@ let cookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
 let serverLog: number;
 const screenshots = resolve('../artifacts/screenshots');
 const errors: string[] = [];
+const externalRequests: string[] = [];
+const downloads: {connector: string; filename: string; format: string}[] = [];
 
 async function freePort(): Promise<number> {
 	return new Promise((resolvePort, reject) => {
@@ -91,10 +93,18 @@ test.beforeAll(async () => {
 
 test.beforeEach(async ({ page }) => {
 	page.on('pageerror', error => errors.push(error.message));
+	await page.context().route('**/*', async route => {
+		const origin = new URL(route.request().url()).origin;
+		if (origin !== base && origin !== guestOrigin) {
+			externalRequests.push(origin);
+			await route.abort();
+		} else await route.continue();
+	});
 	if (cookies.length) await page.context().addCookies(cookies);
 });
 
 test.afterAll(async () => {
+	await writeFile(resolve('../artifacts/connector-downloads.json'), JSON.stringify({downloads, externalRequests}, null, 2));
 	if (guestServer) await new Promise<void>(resolveServer => guestServer.close(() => resolveServer()));
 	if (child && child.exitCode === null) {
 		await new Promise<void>(resolveChild => {
@@ -135,10 +145,13 @@ test('owner setup, meeting creation, agent key and embedding setup', async ({ pa
 	await page.getByRole('button', { name: 'New key', exact: true }).click();
 	await page.getByLabel('Key name').fill('My test agent');
 	await page.getByRole('button', { name: 'Create key', exact: true }).click();
-	await expect(page.locator('[data-sensitive]')).toBeVisible();
-	agentKey = (await page.locator('[data-sensitive]').textContent())!.trim();
+	await expect(page.locator('[data-key-value]')).toBeVisible();
+	agentKey = (await page.locator('[data-key-value]').textContent())!.trim();
 	const keys = await api(page.request, '/v1/api-keys');
 	keyId = keys.items.find((key: {name:string}) => key.name === 'My test agent').id;
+	expect(keys.items.find((key: {id:string}) => key.id === keyId).connector_id).toBe('codex');
+	await page.getByRole('button', {name:'Check OpenSlot connection',exact:true}).click();
+	await expect(page.getByText(/OpenSlot responded with 10 tools/)).toBeVisible();
 	await shot(page, 'agent-desktop-light');
 	const today = new Date().toISOString().slice(0, 10);
 	const end = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -206,7 +219,7 @@ test('a guest books cross-origin, an agent manages the same booking, and conflic
 
 test('responsive views, dark theme, revocation and no client exceptions', async ({ page }) => {
 	// Put one synthetic booking in the past to exercise the dashboard count contract.
-	execFileSync('python3', ['-c', "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"UPDATE bookings SET start_at='2020-01-01 09:00:00', end_at='2020-01-01 09:30:00' WHERE status='confirmed' AND id=(SELECT id FROM bookings WHERE status='confirmed' ORDER BY start_at LIMIT 1)\"); c.commit(); c.close()", join(dataDirectory, 'test.db')]);
+	execFileSync('python3', ['-c', "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"UPDATE bookings SET start_at='2020-01-01T09:00:00Z', end_at='2020-01-01T09:30:00Z' WHERE status='confirmed' AND id=(SELECT id FROM bookings WHERE status='confirmed' ORDER BY start_at LIMIT 1)\"); c.commit(); c.close()", join(dataDirectory, 'test.db')]);
 	await page.goto(base + '/admin/');
 	await expect(page.getByRole('heading', {name:'Your time, well spent.'})).toBeVisible();
 	await expect.soft(page.locator('.count-pill')).toHaveText('1');
@@ -237,4 +250,73 @@ test('responsive views, dark theme, revocation and no client exceptions', async 
 	const denied = await page.request.post(base + '/mcp', { headers:{Authorization:`Bearer ${agentKey}`}, data:{jsonrpc:'2.0',id:1,method:'tools/list'} });
 	expect(denied.status()).toBe(401);
 	expect(errors).toEqual([]);
+});
+
+
+test('app connections and provider-specific setup are usable without provider keys', async ({page}) => {
+ await page.goto(base + '/admin/apps');
+ await expect(page.getByRole('heading',{name:'Make your tools work together.'})).toBeVisible();
+ for (const name of ['Google Calendar','Outlook / Microsoft 365','Apple, Fastmail & CalDAV','Gmail','Notion']) await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Connect Notion',exact:true}).click();
+ await expect(page.getByLabel('Notion integration token',{exact:true})).toHaveAttribute('type','password');
+ await expect(page.getByRole('button',{name:'Connect and create bookings database'})).toBeVisible();
+ await shot(page,'apps-desktop-light');
+ await page.goto(base+'/admin/agent');
+ const catalog=await api(page.request,'/v1/agent-connectors');
+ for (const connector of catalog.items) {
+  await page.getByRole('button',{name:`Connect ${connector.name}`,exact:true}).click();
+  const panel=page.getByRole('region',{name:`${connector.name} setup`});
+  await expect(panel).toBeVisible();
+  if (!connector.oauth) {
+   await panel.getByLabel('OpenSlot API key',{exact:true}).fill(agentKey);
+   await expect(panel.getByLabel('OpenSlot API key',{exact:true})).toHaveAttribute('type','password');
+  }
+  const config=await panel.locator('.connector-code').textContent();
+  expect(config).toContain(base+'/mcp');
+  if (connector.format==='json') expect(JSON.parse(config!)).toBeTruthy();
+  if (connector.public_url) await expect(panel.getByText('A public HTTPS address is needed.')).toBeVisible();
+  if (connector.id==='antigravity') expect(JSON.parse(config!).mcpServers.openslot.serverUrl).toBe(base+'/mcp');
+  if (connector.id==='gemini-cli') expect(JSON.parse(config!).mcpServers.openslot.httpUrl).toBe(base+'/mcp');
+  if (connector.id==='vscode') expect(JSON.parse(config!).servers.openslot.type).toBe('http');
+  if (connector.format==='json') {
+   expect(config).toContain(agentKey);
+   await expect(panel.locator('.connector-code')).toHaveAttribute('data-sensitive');
+   if (connector.id==='claude-code') await shot(page,'agent-json-masked');
+  } else expect(config).not.toContain(agentKey);
+  if (connector.id==='codex') expect(config).toContain('bearer_token_env_var = "OPENSLOT_API_KEY"');
+  if (connector.id==='openai') expect(config).toContain('"require_approval": "always"');
+  if (connector.id==='grok') expect(config).toContain('base_url="https://api.x.ai/v1"');
+  if (connector.id==='glm') expect(config).toContain('"transport_type": "streamable-http"');
+  if (connector.id==='bedrock') expect(JSON.parse(config!)[0].config.remoteMcp.url).toBe(base+'/mcp');
+  const pendingDownload=page.waitForEvent('download');
+  await panel.getByRole('button',{name:'Download',exact:true}).click();
+  const download=await pendingDownload;
+  expect(download.suggestedFilename()).toBe(connector.filename);
+  expect(await download.failure()).toBeNull();
+  expect(await readFile((await download.path())!,'utf8')).toBe(config);
+  const downloadDirectory=resolve('../artifacts/connector-downloads',connector.id);
+  await mkdir(downloadDirectory,{recursive:true});
+  await download.saveAs(join(downloadDirectory,download.suggestedFilename()));
+  downloads.push({connector:connector.id,filename:download.suggestedFilename(),format:connector.format});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(1023);
+ }
+ await page.getByRole('button',{name:'Connect OpenAI API',exact:true}).click();
+ await shot(page,'provider-desktop-light');
+ await page.setViewportSize({width:390,height:844});
+ await page.goto(base+'/admin/apps');
+ await expect(page.getByRole('heading',{name:'Gmail',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Connect Notion',exact:true}).click();
+ await page.getByText('Google setup and permissions',{exact:true}).click();
+ await expect(page.getByLabel('Gmail redirect URI',{exact:true})).toHaveValue(base+'/v1/apps/gmail/callback');
+ await shot(page,'apps-mobile-light');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+ await page.goto(base+'/admin/agent');
+ await page.getByRole('button',{name:'Connect Codex',exact:true}).click();
+ await page.getByLabel('OpenSlot API key',{exact:true}).fill(agentKey);
+ await page.getByRole('button',{name:'Check OpenSlot connection',exact:true}).click();
+ await expect(page.getByText('This key is invalid or has been revoked.')).toBeVisible();
+ await shot(page,'agent-mobile-light');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+ expect(errors).toEqual([]);
+ expect(externalRequests).toEqual([]);
 });

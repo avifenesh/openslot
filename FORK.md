@@ -9,7 +9,7 @@ OpenSlot is an independent modified distribution of [Calnode](https://github.com
 
 Calnode's contributors built the scheduling engine, database and migrations, calendar connectors, booking pages, API, MCP tools, authentication, email and webhook delivery, and original embed. OpenSlot does not claim these as original work.
 
-OpenSlot changes the product identity, main navigation and dashboard; adds dedicated agent connection and share/embed screens; improves popup keyboard interaction and dynamic triggers; adds OpenSlot widget names while retaining legacy aliases; fixes host-timezone formatting; enables the SDK's current stateless MCP protocol; and adds browser verification of the resulting product flows.
+OpenSlot changes the product identity, main navigation and dashboard; adds dedicated agent connection and share/embed screens; improves popup keyboard interaction and dynamic triggers; adds OpenSlot widget names while retaining legacy aliases; fixes host-timezone formatting; enables the SDK's current stateless MCP protocol; and adds browser verification of the resulting product flows. It also adds client-specific agent adapters, Gmail OAuth sending, and Notion booking synchronization.
 
 The Go module path remains `github.com/calnode/calnode` to preserve internal imports. API key prefixes, environment names, database migrations, and legacy `calnode-booking`, `Calnode`, and `calnode:booked` interfaces remain compatible. These identifiers indicate compatibility, not affiliation.
 

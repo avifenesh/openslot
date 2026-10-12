@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/calnode/calnode/internal/calendar"
 	"github.com/calnode/calnode/internal/gcal"
@@ -58,9 +60,16 @@ func (h *Handler) GetGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	secretSet := secretEnc != ""
+	if clientID == "" {
+		if active := h.getGoogleAuth(); active != nil {
+			clientID = active.ClientID
+			secretSet = active.ClientSecret != ""
+		}
+	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"client_id":         clientID,
-		"client_secret_set": secretEnc != "",
+		"client_secret_set": secretSet,
 		"configured":        clientID != "",
 		// base_url is the identity host the server builds OAuth redirect URIs
 		// from (see PatchGoogleSettings); the setup UI renders the exact URIs to
@@ -91,6 +100,23 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	previousGoogle := h.getGoogleAuth()
+	// Persist an unchanged environment-sourced secret when the operator saves the form.
+	// Otherwise a DB client ID with an empty secret would override the working environment on restart.
+	if previousGoogle != nil && req.ClientID == previousGoogle.ClientID && req.ClientSecret == "" {
+		var stored string
+		if err := h.db.QueryRowContext(r.Context(), "SELECT google_client_secret_enc FROM server_settings WHERE id=1").Scan(&stored); err == nil && stored == "" {
+			req.ClientSecret = previousGoogle.ClientSecret
+		}
+	}
+	if h.apps != nil && (req.ClientID == "" || previousGoogle == nil || previousGoogle.ClientID != req.ClientID) {
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+		if err := h.apps.Disconnect(ctx, "gmail"); err != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "could not disconnect Gmail before changing Google OAuth; try again")
+			return
+		}
+	}
 	if req.ClientID == "" {
 		// Clearing credentials — wipe both columns so the encrypted secret
 		// doesn't linger in the DB after the admin removes Google OAuth.
@@ -103,7 +129,7 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		h.SetCalendar(nil)
+		h.replaceGoogleCalendar(nil)
 		h.authMu.Lock()
 		h.googleAuth = nil
 		h.authMu.Unlock()
@@ -170,12 +196,39 @@ func (h *Handler) PatchGoogleSettings(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusInternalServerError, "failed to initialize calendar client")
 			return
 		}
-		svc := calendar.NewService(h.db)
-		svc.Register(gc)
-		h.SetCalendar(svc)
+		h.replaceGoogleCalendar(gc)
 		h.SetGoogleAuth(req.ClientID, resolvedSecret, h.baseURL+"/v1/auth/callback", h.secureCookie)
 		h.logger.Info("google settings: credentials updated and gcal hot-reloaded")
 	}
 
 	h.GetGoogleSettings(w, r)
+}
+
+// Build a replacement service rather than mutating providers used by active requests.
+// Google goes first because the OAuth callback decrypts state through Primary().
+func (h *Handler) replaceGoogleCalendar(google calendar.Provider) {
+	next := calendar.NewService(h.db)
+	if google != nil {
+		next.Register(google)
+	}
+	if previous := h.getCal(); previous != nil {
+		if google == nil {
+			if microsoft := previous.Provider("microsoft"); microsoft != nil {
+				next.Register(microsoft)
+			}
+		}
+		if primary := previous.Primary(); primary != nil && primary.Name() != "google" {
+			next.Register(primary)
+		}
+		for _, name := range previous.ProviderNames() {
+			if name != "google" {
+				next.Register(previous.Provider(name))
+			}
+		}
+	}
+	if next.Any() {
+		h.SetCalendar(next)
+	} else {
+		h.SetCalendar(nil)
+	}
 }

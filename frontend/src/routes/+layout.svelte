@@ -26,7 +26,7 @@
 		{ path: '/availability', label: 'Availability', icon: Clock },
 	];
 	const connections = [
-		{ path: '/calendar', label: 'Calendars', icon: Calendar },
+		{ path: '/apps', label: 'App connections', icon: Plug },
 		{ path: '/agent', label: 'Your agent', icon: Plug },
 		{ path: '/share', label: 'Share & embed', icon: Link },
 	];
@@ -125,7 +125,7 @@
 				{#if moreOpen}
 					{#if $currentUser?.is_admin}<a href={`${base}/members`} onclick={() => menuOpen = false}><Users size={18}/><span>Members</span></a><a href={`${base}/teams`} onclick={() => menuOpen = false}><Users size={18}/><span>Teams</span></a>{/if}
 					<a href={`${base}/webhooks`} onclick={() => menuOpen = false}><Webhook size={18}/><span>Webhooks</span></a>
-					<a href={`${base}/connections`} onclick={() => menuOpen = false}><Plug size={18}/><span>Connected apps</span></a>
+					<a href={`${base}/connections`} onclick={() => menuOpen = false}><Plug size={18}/><span>Agent authorizations</span></a>
 					{#if $currentUser?.is_admin && recordingsConfigured}<a href={`${base}/recordings`} onclick={() => menuOpen = false}><Video size={18}/><span>Recordings</span></a>{/if}
 				{/if}
 			</nav>
