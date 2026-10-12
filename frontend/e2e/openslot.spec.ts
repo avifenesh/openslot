@@ -18,7 +18,8 @@ let keyId = '';
 let bookedId = '';
 let cookies: Awaited<ReturnType<BrowserContext['cookies']>> = [];
 let serverLog: number;
-const screenshots = resolve('../artifacts/screenshots');
+const artifacts = resolve(process.env.OPENSLOT_TEST_ARTIFACTS ?? '../artifacts');
+const screenshots = join(artifacts, 'screenshots');
 const errors: string[] = [];
 const externalRequests: string[] = [];
 const downloads: {connector: string; filename: string; format: string}[] = [];
@@ -75,8 +76,8 @@ test.beforeAll(async () => {
 	dataDirectory = await mkdtemp(join(cacheRoot, 'e2e-'));
 	const port = await freePort();
 	base = `http://127.0.0.1:${port}`;
-	serverLog = openSync(resolve('../artifacts/e2e-server.log'), 'w');
-	child = spawn(resolve('../openslot'), [], {
+	serverLog = openSync(resolve(artifacts, 'e2e-server.log'), 'w');
+	child = spawn(resolve(process.env.OPENSLOT_TEST_BINARY ?? '../openslot'), [], {
 		cwd: dataDirectory,
 		stdio: ['ignore', serverLog, serverLog],
 		// Deliberately exclude any real calendar, mail or model credentials from tests.
@@ -109,7 +110,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterAll(async () => {
-	await writeFile(resolve('../artifacts/connector-downloads.json'), JSON.stringify({downloads, externalRequests}, null, 2));
+	await writeFile(resolve(artifacts, 'connector-downloads.json'), JSON.stringify({downloads, externalRequests}, null, 2));
 	if (guestServer) await new Promise<void>(resolveServer => guestServer.close(() => resolveServer()));
 	if (child && child.exitCode === null) {
 		await new Promise<void>(resolveChild => {
@@ -227,7 +228,7 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await page.goto(base + '/admin/inbox');
-	await expect(page.getByRole('heading', { name: 'Turn an email into a meeting.' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Inbox scheduling', exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Manage Gmail' })).toHaveAttribute('href', '/admin/apps');
 	const listening = page.getByRole('switch', { name: 'Send available slots automatically' });
 	await expect(listening).toBeDisabled();
@@ -237,8 +238,29 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	await page.getByLabel('Meeting type', { exact: true }).click();
 	await page.getByRole('option', { name: 'Intro call', exact: true }).click();
 	await page.getByLabel('Timezone for offered times').fill('UTC');
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeDisabled();
+	await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+	let releaseSave!: () => void;
+	const saveHeld = new Promise<void>(resolve => { releaseSave = resolve; });
+	await page.route('**/v1/inbox', async route => {
+		if (route.request().method() === 'PUT') await saveHeld;
+		await route.continue();
+	});
 	await page.getByRole('button', { name: 'Save settings', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeDisabled();
+	// Edits made while the request is in flight remain an unsaved draft.
+	await page.getByLabel('Dedicated email address').fill('edited-during-save@example.test');
+	releaseSave();
 	await expect(page.getByText('Settings saved. Inbox scheduling is paused.', { exact: true })).toBeVisible();
+	await expect(page.getByLabel('Dedicated email address')).toHaveValue('edited-during-save@example.test');
+	await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeDisabled();
+	await page.getByLabel('Dedicated email address').fill('scheduling@example.test');
+	await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeEnabled();
+	await page.unroute('**/v1/inbox');
 	await page.reload();
 	await expect(page.getByLabel('Dedicated email address')).toHaveValue('scheduling@example.test');
 	await expect(page.getByLabel('Meeting type', { exact: true })).toHaveText('Intro call');
@@ -247,6 +269,32 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	expect(saved.settings).toMatchObject({ enabled: false, address: 'scheduling@example.test', event_slug: 'intro-call', timezone: 'UTC' });
 	const apps = await api(page.request, '/v1/apps');
 	expect(apps.items.find((app: { provider: string }) => app.provider === 'gmail').connected).toBe(false);
+
+	// Both explicit and scheduled activity refresh must preserve unsaved form edits.
+	await page.clock.install();
+	await page.reload();
+	await expect(page.getByLabel('Dedicated email address')).toHaveValue('scheduling@example.test');
+	await page.getByLabel('Dedicated email address').fill('unsaved@example.test');
+	let releaseRefresh!: () => void;
+	const refreshHeld = new Promise<void>(resolve => { releaseRefresh = resolve; });
+	await page.route('**/v1/inbox', async route => { await refreshHeld; await route.continue(); });
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toHaveCount(0);
+	releaseRefresh();
+	await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+	await page.unroute('**/v1/inbox');
+	await expect(page.getByLabel('Dedicated email address')).toHaveValue('unsaved@example.test');
+	const autoRefresh = page.waitForResponse(response => response.url() === base + '/v1/inbox' && response.request().method() === 'GET');
+	await page.clock.fastForward(30_000);
+	expect((await autoRefresh).ok()).toBe(true);
+	await expect(page.getByLabel('Dedicated email address')).toHaveValue('unsaved@example.test');
+	await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeDisabled();
+	await page.getByLabel('Dedicated email address').fill('scheduling@example.test');
+	await expect(page.getByText('Settings saved', { exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run sample', exact: true })).toBeEnabled();
 
 	for (const [label, engine] of [['Codex', 'codex'], ['Claude Code', 'claude'], ['External webhook', 'webhook']] as const) {
 		await page.getByRole('button', { name: label, exact: true }).click();
@@ -257,7 +305,7 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	const activity = page.locator('.inbox-activity-list article');
 	await expect(activity).toHaveCount(1);
 	await expect(activity).toContainText('Sample conversation');
-	await expect(activity.locator('.soft-badge')).toHaveText('pending');
+	await expect(activity.locator('.soft-badge')).toHaveText('Queued');
 	await expect(activity).toContainText('Waiting for an agent worker.');
 
 	// This request context has no owner cookies. The worker uses a workspace key
@@ -300,10 +348,10 @@ test('paused inbox configuration, runtime commands and a task-scoped synthetic s
 	const empty = await request.post(base + '/v1/inbox/claim', { headers: workerHeaders, data: { engine: 'webhook' } });
 	expect(empty.status()).toBe(204);
 	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
-	await expect(activity.locator('.soft-badge')).toHaveText('previewed');
+	await expect(activity.locator('.soft-badge')).toHaveText('Sample ready');
 	await expect(activity.locator('.inbox-result')).toHaveText(offered.result);
 	await expect(page.getByRole('switch', { name: 'Send available slots automatically' })).not.toBeChecked();
-	await writeFile(resolve('../artifacts/inbox-preview-receipt.json'), JSON.stringify({
+	await writeFile(resolve(artifacts, 'inbox-preview-receipt.json'), JSON.stringify({
 		id: task.id, status: (await receipt()).status, preview: email.preview,
 		meeting_type: email.meeting_type, timezone: email.timezone,
 		offered_starts: starts, result: offered.result,
@@ -411,7 +459,7 @@ test('app connections and provider-specific setup are usable without provider ke
   expect(download.suggestedFilename()).toBe(connector.filename);
   expect(await download.failure()).toBeNull();
   expect(await readFile((await download.path())!,'utf8')).toBe(config);
-  const downloadDirectory=resolve('../artifacts/connector-downloads',connector.id);
+  const downloadDirectory=resolve(artifacts, 'connector-downloads',connector.id);
   await mkdir(downloadDirectory,{recursive:true});
   await download.saveAs(join(downloadDirectory,download.suggestedFilename()));
   downloads.push({connector:connector.id,filename:download.suggestedFilename(),format:connector.format});
@@ -436,4 +484,100 @@ test('app connections and provider-specific setup are usable without provider ke
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
  expect(errors).toEqual([]);
  expect(externalRequests).toEqual([]);
+});
+
+// Capture the current embedded frontend in both themes, independently of the
+// integration screenshots above. Every state also checks layout contracts.
+test('UI regression matrix: controls, connector setup and independent app cards', async ({ page }) => {
+	const consoleErrors: string[] = [];
+	page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+	const metrics: unknown[] = [];
+	for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+		await page.setViewportSize({ width, height });
+		for (const theme of ['light', 'dark'] as const) {
+			for (const [screen, path, heading] of [
+				['overview', '', 'Your time, well spent.'],
+				['apps', 'apps', 'Make your tools work together.'],
+				['agent', 'agent', 'Connect your agent.'],
+				['inbox', 'inbox', 'Inbox scheduling'],
+			] as const) {
+				await page.goto(`${base}/admin/${path}`);
+				await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+				const dark = theme === 'dark';
+				if (await page.locator('html').evaluate(el => el.classList.contains('dark')) !== dark) {
+					if (device === 'mobile') await page.getByRole('button', { name: 'Open navigation' }).click();
+					await page.getByRole('button', { name: dark ? 'Use dark theme' : 'Use light theme' }).click();
+					if (device === 'mobile') await page.keyboard.press('Escape');
+				}
+				await expect(page.locator('html')).toHaveClass(dark ? /dark/ : /^(?!.*\bdark\b)/);
+				if (screen === 'agent') {
+					const picker = page.getByRole('region', { name: 'Agent connectors', exact: true });
+					const setup = page.getByRole('region', { name: 'Codex setup', exact: true });
+					await expect(setup).toBeVisible();
+					const pickerBox = (await picker.boundingBox())!;
+					const setupBox = (await setup.boundingBox())!;
+					if (device === 'desktop') {
+						expect(setupBox.x).toBeGreaterThanOrEqual(pickerBox.x + pickerBox.width);
+						expect(Math.abs(setupBox.y - pickerBox.y)).toBeLessThan(2);
+					} else {
+						expect(pickerBox.height).toBeLessThan(300);
+						expect(setupBox.y).toBeGreaterThanOrEqual(pickerBox.y + pickerBox.height);
+						const list = picker.locator('.connector-grid');
+						expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+					}
+					const urlBox = (await page.getByLabel('MCP server URL').boundingBox())!;
+					expect(urlBox.y + urlBox.height).toBeLessThanOrEqual(height);
+					expect((await page.getByLabel('Search connectors').boundingBox())!.height).toBe(device === 'mobile' ? 44 : 40);
+				}
+				if (screen === 'apps') {
+					const otherCard = page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Your agent', exact: true }) });
+					await expect(otherCard).toBeVisible();
+					const before = (await otherCard.boundingBox())!;
+					await page.getByRole('button', { name: 'Connect Notion', exact: true }).click();
+					await expect(page.getByLabel('Notion integration token', { exact: true })).toBeVisible();
+					const after = (await otherCard.boundingBox())!;
+					expect(after.height).toBeCloseTo(before.height, 0);
+					if (device === 'desktop') {
+						const notion = (await page.locator('.app-connector-card').filter({ has: page.getByRole('heading', { name: 'Notion', exact: true }) }).boundingBox())!;
+						expect(notion.height).toBeGreaterThan(after.height);
+					}
+				}
+				if (screen === 'inbox') {
+					await expect(page.getByLabel('Dedicated email address')).toHaveValue('scheduling@example.test');
+					expect((await page.getByLabel('Dedicated email address').boundingBox())!.height).toBe(device === 'mobile' ? 44 : 40);
+					expect((await page.getByRole('button', { name: 'Save settings', exact: true }).boundingBox())!.height).toBe(40);
+					for (const name of ['Run sample', 'Copy command', 'Refresh']) {
+						const button = page.getByRole('button', { name, exact: true });
+						const box = (await button.boundingBox())!;
+						expect(box.height, `${device} ${name} target`).toBeGreaterThanOrEqual(36);
+						expect(box.width, `${device} ${name} target`).toBeGreaterThanOrEqual(36);
+					}
+					await expect(page.locator('.inbox-activity-list .soft-badge')).toHaveText('Sample ready');
+					await page.locator('.inbox-reply summary').click();
+					await expect(page.locator('.inbox-result')).toBeHidden();
+					await page.locator('.inbox-reply summary').click();
+					await expect(page.locator('.inbox-result')).toBeVisible();
+				}
+				await page.evaluate(() => window.scrollTo(0, 0));
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+				const name = `matrix-${screen}-${device}-${theme}`;
+				metrics.push({ name, viewport: { width, height }, layout: await page.evaluate(() => ({
+					width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
+					font: getComputedStyle(document.body).fontFamily,
+					regions: Array.from(document.querySelectorAll('.connector-picker, .connector-detail, .app-connector-card')).map(el => { const box = el.getBoundingClientRect(); return { label: el.getAttribute('aria-label') || el.querySelector('h2')?.textContent, x: box.x, y: box.y, width: box.width, height: box.height }; }),
+					controls: Array.from(document.querySelectorAll('main input, main button')).filter(el => el.getBoundingClientRect().height > 0).map(el => {
+						const box = el.getBoundingClientRect();
+						return { label: el.getAttribute('aria-label') || el.textContent?.trim(), x: box.x, y: box.y, width: box.width, height: box.height, fontSize: getComputedStyle(el).fontSize };
+					})
+				})) });
+				await shot(page, name);
+				await page.evaluate(() => window.scrollTo(0, 0));
+				await page.screenshot({ path: join(screenshots, `${name}-viewport.png`), animations: 'disabled', mask: [page.locator('[data-sensitive]')] });
+			}
+		}
+	}
+	await writeFile(join(artifacts, 'metrics.json'), JSON.stringify({ metrics, consoleErrors, errors, externalRequests }, null, 2));
+	expect(consoleErrors).toEqual([]);
+	expect(errors).toEqual([]);
+	expect(externalRequests).toEqual([]);
 });

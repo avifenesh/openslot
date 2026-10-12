@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
 	import type { Snippet } from 'svelte';
-	import { Calendar, Clock, Link, Plug, Settings, Sun, Moon, Menu, X, LogOut, Users, Webhook, LayoutDashboard, Video } from '@lucide/svelte';
+	import { Calendar, Clock, Link, Plug, Settings, Sun, Moon, Menu, X, LogOut, Users, Webhook, LayoutDashboard, Video, Mail, Bot } from '@lucide/svelte';
 	import '../app.css';
 	import { api, type User } from '$lib/api';
 	import { currentUser, authStatus, type AuthStatus } from '$lib/stores';
@@ -26,9 +26,9 @@
 		{ path: '/availability', label: 'Availability', icon: Clock },
 	];
 	const connections = [
-		{ path: '/inbox', label: 'Inbox scheduling', icon: Plug },
+		{ path: '/inbox', label: 'Inbox scheduling', icon: Mail },
 		{ path: '/apps', label: 'App connections', icon: Plug },
-		{ path: '/agent', label: 'Your agent', icon: Plug },
+		{ path: '/agent', label: 'Your agent', icon: Bot },
 		{ path: '/share', label: 'Share & embed', icon: Link },
 	];
 	function active(path: string) {

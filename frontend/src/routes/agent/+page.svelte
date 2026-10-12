@@ -46,12 +46,14 @@
 <div class="page-heading"><div><p class="eyebrow">BRING THE AGENT YOU ALREADY USE</p><h1>Connect your agent.</h1><p>Give it your real availability and booking tools. Your model account stays with your agent.</p></div><span class="feature-icon"><Plug size={25}/></span></div>
 {#if error}<div class="error-panel" role="alert">{error}<Button variant="outline" onclick={load}>Try again</Button></div>{/if}
 {#if loading}<div class="surface loading-panel" role="status">Loading connectors…</div>{:else if !error}
-<section class="surface connector-picker" aria-label="Agent connectors">
  <div class="connector-picker-tools"><div class="segmented" aria-label="Connector category">{#each [{id:'all',label:'All'},{id:'app',label:'Agent apps'},{id:'provider',label:'Model providers'}] as tab}<Button variant={category===tab.id?'default':'ghost'} aria-pressed={category===tab.id} onclick={()=>category=tab.id as typeof category}>{tab.label}</Button>{/each}</div><div class="connector-search"><Search size={16}/><Input aria-label="Search connectors" placeholder="Find your agent" bind:value={search}/></div></div>
+<div class="connector-workspace">
+<section class="surface connector-picker" aria-label="Agent connectors">
  <div class="connector-grid">{#each visible as item}<Button variant="ghost" class={`connector-card ${item.id===selectedId?'selected':''}`} aria-label={`Connect ${item.name}`} aria-pressed={item.id===selectedId} onclick={()=>choose(item.id)}><span class="connector-monogram" aria-hidden="true">{item.name.slice(0,2)}</span><span><strong>{item.name}</strong><small>{item.description}</small></span>{#if selectedId===item.id}<Check class="connector-check" size={16}/>{/if}</Button>{/each}</div>
  {#if visible.length===0}<p class="field-hint">No matching connector. Try another name or choose All.</p>{/if}
 </section>
 {#if selected}
+<div class="connector-setup">
 <section class="surface connector-detail" aria-label={`${selected.name} setup`}>
  <div class="section-heading"><div><p class="eyebrow">SELECTED CONNECTOR</p><h2>{selected.name}</h2></div><a class="text-link" href={selected.docs} target="_blank" rel="noopener noreferrer">Provider instructions <ExternalLink size={14}/></a></div>
  <div class="connector-detail-body">
@@ -72,7 +74,9 @@
  </div>
 </section>
 {#if !selected.oauth}<section class="surface key-manager">{#key selectedId}<APIKeyManager connectorId={selectedId} suggestedName={`${selected.name} agent`} oncreated={created} onrevoked={revoked}/>{/key}</section>{/if}
+</div>
 {/if}
+</div>
 <div class="agent-guidance"><Plug size={20}/><div><strong>Your agent, your permissions.</strong><p>Keys inherit your OpenSlot role. Revoke a key to stop its access. Creating a key does not mean the external agent has connected.</p></div></div>
 <a class="text-link" href={`${base}/connections`}>Manage signed-in agents <ArrowRight size={16}/></a>
 {/if}
