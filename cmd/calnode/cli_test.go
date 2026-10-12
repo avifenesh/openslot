@@ -183,10 +183,10 @@ func TestCLIPortConflictFailsBeforeDatabaseIsCreated(t *testing.T) {
 }
 func TestServiceUnitKeepsPathsLiteral(t *testing.T) {
 	unit := serviceUnit("/home/person/a $name%/openslot", "/home/person/a $name%/config.env")
-	if !strings.Contains(unit, `ExecStart="/home/person/a $$name%%/openslot" serve --config "/home/person/a $$name%%/config.env"`) {
+	if !strings.Contains(unit, `ExecStart="/home/person/a $name%%/openslot" serve --config "/home/person/a $$name%%/config.env"`) {
 		t.Fatal("exec path not escaped")
 	}
-	if !strings.Contains(unit, `WorkingDirectory="/home/person/a $name%%"`) {
+	if !strings.Contains(unit, `WorkingDirectory=/home/person/a $name%%`) {
 		t.Fatal("working directory not escaped")
 	}
 	if !strings.Contains(unit, "WantedBy=default.target") || !strings.Contains(unit, "Restart=on-failure") {
@@ -257,5 +257,38 @@ func TestCLIServiceInstallReplaceAndUninstallPreserveData(t *testing.T) {
 		if !strings.Contains(string(calls), call) {
 			t.Fatalf("missing %s", call)
 		}
+	}
+}
+
+func TestServiceUnitParsesWithSystemd(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("systemd is Linux-only")
+	}
+	tool, err := exec.LookPath("systemd-analyze")
+	if err != nil {
+		t.Skip("systemd-analyze not installed")
+	}
+	root := filepath.Join(t.TempDir(), "config with $dollar and %percent")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(root, "config.env")
+	if err := os.WriteFile(config, []byte("# synthetic\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(root, "openslot")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	unit := filepath.Join(root, "openslot-test.service")
+	if err := os.WriteFile(unit, []byte(serviceUnit(executable, config)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, tool, "--user", "--man=no", "verify", unit)
+	cmd.Env = append(systemctlEnv(), "XDG_RUNTIME_DIR="+t.TempDir())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("systemd rejected generated unit: %v\n%s", err, output)
 	}
 }
