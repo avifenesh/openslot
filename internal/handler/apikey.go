@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/calnode/calnode/internal/agentconnectors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/calnode/calnode/internal/uid"
@@ -14,7 +16,7 @@ import (
 func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFromContext(r.Context())
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT id, name, created_at, last_used_at
+		SELECT id, name, created_at, last_used_at, connector_id
 		FROM api_keys WHERE user_id = ?
 		ORDER BY created_at DESC`, user.ID)
 	if err != nil {
@@ -25,15 +27,16 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type keyItem struct {
-		ID         string  `json:"id"`
-		Name       string  `json:"name"`
-		CreatedAt  string  `json:"created_at"`
-		LastUsedAt *string `json:"last_used_at"`
+		ID          string  `json:"id"`
+		Name        string  `json:"name"`
+		CreatedAt   string  `json:"created_at"`
+		LastUsedAt  *string `json:"last_used_at"`
+		ConnectorID string  `json:"connector_id"`
 	}
 	items := []keyItem{}
 	for rows.Next() {
 		var item keyItem
-		if err := rows.Scan(&item.ID, &item.Name, &item.CreatedAt, &item.LastUsedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.CreatedAt, &item.LastUsedAt, &item.ConnectorID); err != nil {
 			h.logger.ErrorContext(r.Context(), "scan api key row", "error", err)
 			continue
 		}
@@ -54,10 +57,16 @@ func (h *Handler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	var req struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		ConnectorID string `json:"connector_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if !agentconnectors.Valid(req.ConnectorID) {
+		h.writeError(w, http.StatusBadRequest, "unknown agent connector")
 		return
 	}
 	if req.Name == "" {
@@ -82,20 +91,22 @@ func (h *Handler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	if _, err := h.db.ExecContext(r.Context(), `
-		INSERT INTO api_keys (id, user_id, name, key_hash, created_at)
-		VALUES (?, ?, ?, ?, ?)`,
-		keyID, user.ID, req.Name, keyHash, now); err != nil {
+		INSERT INTO api_keys (id, user_id, name, key_hash, created_at, connector_id)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		keyID, user.ID, req.Name, keyHash, now, req.ConnectorID); err != nil {
 		h.logger.ErrorContext(r.Context(), "create api key: insert", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	w.Header().Set("Cache-Control", "no-store")
 	h.writeJSON(w, http.StatusCreated, map[string]any{
-		"id":         keyID,
-		"name":       req.Name,
-		"key":        plainKey,
-		"created_at": now,
-		"note":       "save this key — it will not be shown again",
+		"id":           keyID,
+		"connector_id": req.ConnectorID,
+		"name":         req.Name,
+		"key":          plainKey,
+		"created_at":   now,
+		"note":         "save this key — it will not be shown again",
 	})
 }
 

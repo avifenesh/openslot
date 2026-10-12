@@ -413,3 +413,58 @@ a.panel-footer { color: var(--primary); }
 	.page-container > .flex.gap-8 > nav ul { display: flex; flex-wrap: wrap; }
 	.page-container > .flex.gap-8 > nav ul > li:has(+ li) { margin-top: 0; }
 }
+
+/* Agent and app connection setup. */
+.connector-picker { padding: 22px; margin-bottom: 24px; }
+.connector-picker-tools { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.connector-search { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.connector-search input { max-width: 210px; }
+.connector-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.connector-card { height: auto; min-height: 96px; align-items: flex-start; justify-content: flex-start; padding: 15px; border: 1px solid var(--border); border-radius: 11px; gap: 11px; text-align: left; white-space: normal; position: relative; }
+.connector-card.selected { background: var(--accent); border-color: var(--primary); }
+.connector-monogram { display: flex; align-items: center; justify-content: center; width: 31px; height: 31px; flex: 0 0 31px; border-radius: 9px; background: var(--muted); color: var(--foreground); font-size: 11px; font-weight: 650; }
+.connector-card strong { display: block; font-size: 12px; margin-bottom: 5px; padding-right: 12px; }
+.connector-card small { display: block; color: var(--muted-foreground); font-size: 10px; font-weight: 400; line-height: 1.6; }
+.connector-check { position: absolute; right: 10px; top: 12px; color: var(--primary); }
+.connector-detail { margin-bottom: 24px; }
+.connector-detail-body { padding: 0 26px 26px; }
+.connector-notice { margin-top: 18px; padding: 15px; background: var(--muted); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+.connector-notice p { color: var(--muted-foreground); margin-top: 5px; line-height: 1.6; }
+.connector-steps { list-style: decimal; padding-left: 22px; margin: 22px 0; font-size: 12px; line-height: 1.8; color: var(--muted-foreground); }
+.connector-steps li { padding-left: 5px; margin-bottom: 8px; }
+.connector-credential { margin-bottom: 24px; }
+.connector-actions { display: flex; gap: 8px; }
+.connector-code { max-height: 440px; overflow: auto; }
+.connector-command { margin-top: 18px; }
+.connector-command summary { cursor: pointer; color: var(--primary); font-size: 12px; }
+.connector-command button { margin-top: 10px; }
+.connector-test { display: flex; align-items: flex-start; gap: 18px; margin-top: 24px; }
+.connector-test .field-hint { margin-top: 0; }
+.connector-result { display: flex; gap: 9px; margin-top: 18px; padding: 14px; background: var(--accent); color: var(--accent-foreground); border-radius: 10px; font-size: 12px; }
+.connector-result svg { flex-shrink: 0; }
+@media(max-width:1200px) { .connector-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:767px) {
+ .connector-picker { padding: 16px; }
+ .connector-grid { grid-template-columns: 1fr; }
+ .connector-card { min-height: 78px; }
+ .connector-picker-tools, .connector-search { width: 100%; }
+ .connector-search input { max-width: none; width: 100%; }
+ .connector-detail-body { padding: 0 20px 20px; }
+ .connector-test { flex-direction: column; gap: 10px; }
+ .connector-actions { flex-wrap: wrap; }
+ .connector-detail .snippet-header { gap: 10px; flex-wrap: wrap; }
+}
+.app-connector-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; }
+.app-connector-card { padding: 25px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.app-connector-heading { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
+.app-connector-card > p { color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.app-connector-card h2 { margin-top: 2px; }
+.app-connector-card > .connector-command { width: 100%; margin-top: 0; }
+.app-callback { margin-top: 12px; }
+.app-callback input { width: 100%; min-width: 0; }
+.app-connection-identity { overflow-wrap: anywhere; }
+.app-connector-card .connector-actions { flex-wrap: wrap; }
+.app-connector-form { display: flex; flex-direction: column; gap: 12px; width: 100%; padding-top: 14px; border-top: 1px solid var(--border); }
+.app-connector-form .field-label { margin-bottom: -5px; }
+.app-connector-form > button { white-space: normal; min-height: 36px; height: auto; padding-block: 10px; }
+@media(max-width:767px) { .app-connector-grid { grid-template-columns: 1fr; gap: 18px; } .app-connector-card { padding: 20px; } }

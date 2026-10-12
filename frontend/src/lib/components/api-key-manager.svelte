@@ -8,6 +8,8 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
+	let { connectorId = '', suggestedName = '', oncreated, onrevoked }: {connectorId?: string; suggestedName?: string; oncreated?: (key: {id:string;key:string;connector_id:string})=>void; onrevoked?: (id:string)=>void} = $props();
+	let createdId = $state('');
 	let items: APIKey[] = $state([]);
 	let loading = $state(true);
 	let error = $state('');
@@ -37,8 +39,10 @@
 		if (!newName.trim()) { createError = 'Name is required.'; return; }
 		creating = true;
 		try {
-			const res = await api.post<{ key: string }>('/v1/api-keys', { name: newName.trim() });
+			const res = await api.post<{ id: string; key: string; connector_id: string }>('/v1/api-keys', { name: newName.trim(), connector_id: connectorId });
 			newKey = res.key;
+			createdId = res.id;
+			oncreated?.(res);
 			newName = '';
 			showCreate = false;
 			await load();
@@ -58,6 +62,8 @@
 		if (!revokeTarget) return;
 		try {
 			await api.del(`/v1/api-keys/${revokeTarget.id}`);
+			onrevoked?.(revokeTarget.id);
+			if (createdId === revokeTarget.id) { newKey = ''; createdId = ''; }
 			await load();
 		} catch (e: any) {
 			error = e.message;
@@ -89,7 +95,7 @@
 		<h1 class="text-xl font-semibold tracking-tight">API keys</h1>
 		<p class="mt-1 text-sm text-muted-foreground">Authenticate CLI tools and integrations.</p>
 	</div>
-	<Button onclick={() => { showCreate = !showCreate; createError = ''; newKey = ''; }}>
+	<Button onclick={() => { showCreate = !showCreate; createError = ''; newKey = ''; newName = suggestedName; }}>
 		{showCreate ? 'Cancel' : 'New key'}
 	</Button>
 </div>
@@ -97,7 +103,7 @@
 {#if newKey}
 	<div class="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
 		<p class="mb-2 text-sm font-medium text-primary">Key created · copy it now. It won't be shown again.</p>
-		<div data-sensitive class="mb-3 rounded-md border bg-card px-3 py-2 font-mono text-xs text-foreground break-all">{newKey}</div>
+		<div data-sensitive data-key-value class="mb-3 rounded-md border bg-card px-3 py-2 font-mono text-xs text-foreground break-all">{newKey}</div>
 		<Button variant="outline" size="sm" onclick={copyKey}>
 			Copy to clipboard
 		</Button>
@@ -146,7 +152,7 @@
 				<Tooltip.Provider>
 					{#each items as k}
 						<tr class="transition-colors hover:bg-muted/30">
-							<td class="px-4 py-3 font-medium">{k.name}</td>
+							<td class="px-4 py-3 font-medium">{k.name}{#if k.connector_id}<small class="block text-muted-foreground font-normal">{k.connector_id}</small>{/if}</td>
 							<td class="px-4 py-3 text-muted-foreground">{fmtDate(k.created_at)}</td>
 							<td class="px-4 py-3 text-muted-foreground">
 								{#if k.last_used_at}{fmtDate(k.last_used_at)}{:else}Never{/if}

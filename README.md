@@ -33,33 +33,47 @@ The Go executable embeds the built frontend. After a frontend change, run `make 
 
 ## Connect your agent
 
-Open **Your agent** in the sidebar. Copy the MCP endpoint and create an API key. Use a remote HTTP MCP client with this starting configuration, adapting the format to your client:
+Open **Your agent** and choose a connector. OpenSlot generates the configuration format for Codex, Claude Code, Claude, Google Antigravity, Cursor, Gemini CLI, VS Code/Copilot, or another HTTP MCP client. Model-provider adapters cover OpenAI, Anthropic, Amazon Bedrock through AgentCore, GLM/Z.ai, and Grok/xAI.
 
-```json
-{
-  "mcpServers": {
-    "openslot": {
-      "url": "http://127.0.0.1:8788/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
+Create a separate OpenSlot key for each agent. Copy or download its configuration, then run **Check OpenSlot connection** to verify the key and discover scheduling tools. This check reads the tool catalog. It does not send a model request, change bookings, or prove the external agent has connected. A key's last-used time includes this check.
 
-Keep the key in your client's secure configuration. An API key inherits the issuing user's role; it is not a booking-only permission scope. Revoking it stops further requests. OAuth is also inherited from Calnode for clients that support its authorization flow.
+Provider API keys stay in your agent environment. OpenSlot stores only a hash of each OpenSlot key and shows its plaintext value once. Keys inherit your account's role. They can read and change data allowed by that role, so use a member account when that is the access the agent should have. Revoke a key to stop further requests.
 
-A locally running agent can reach this loopback URL. A cloud-hosted agent needs a reachable HTTPS deployment. The app does not send your API key to any model provider.
+The provider examples read model IDs from your environment instead of pinning a model that may be unavailable in your account. Codex reads `OPENSLOT_API_KEY` from its launch environment. API examples list the additional environment variables and SDK dependency on the setup screen. OpenAI approval requests continue through your agent's approval flow; xAI does not support OpenAI's `require_approval` parameter.
 
-The same key works with the REST API:
+Claude's app connector uses the existing OAuth sign-in flow. Review and revoke those grants under **Agent authorizations**. The Bedrock adapter is an AgentCore harness tool entry; agents using Bedrock through Codex or Claude Code use that client's adapter.
 
-```sh
-curl http://127.0.0.1:8788/v1/event-types \
-  -H 'Authorization: Bearer YOUR_API_KEY'
-```
+Cloud-hosted clients need a publicly reachable HTTPS deployment. Localhost works only for clients on the same computer. The setup screen flags addresses that are visibly local, but it cannot prove external DNS or firewall reachability.
 
-The MCP transport is stateless and supports the current SDK's 2026-07-28 protocol as well as its supported older protocol versions. Let your MCP client handle protocol headers and request metadata. The API and MCP tools use the same scheduling engine as the booking UI.
+The same key works with the REST API. The MCP and REST interfaces share the scheduling engine. A browser check and protocol tests cover authenticated tool discovery, invalid keys, and revoked keys. Generated JSON, TOML, and Python examples are parsed during validation; live model-provider accounts are not used by the test suite.
+
+Provider setup pages are linked from every adapter. Formats were checked against [Codex](https://developers.openai.com/codex/mcp), [Anthropic](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector), [Antigravity](https://www.antigravity.google/docs/mcp), [OpenAI](https://developers.openai.com/api/docs/guides/tools-connectors-mcp), [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html), [Z.ai](https://docs.z.ai/guides/capabilities/mcp-call), and [xAI](https://docs.x.ai/developers/tools/remote-mcp) documentation on 2026-10-12.
+
+## Connect your apps
+
+Open **App connections** for Google Calendar, Outlook/Microsoft 365, CalDAV calendars, Gmail, and Notion. Calendar connections belong to each host. Gmail and Notion are workspace connections managed by administrators.
+
+### Google Calendar, Outlook, and CalDAV
+
+Use the calendar controls to connect accounts, choose which calendars block availability, and select the calendar that receives bookings. Google and Microsoft require configured OAuth applications. CalDAV supports iCloud, Fastmail, Nextcloud, and custom servers with app-specific credentials.
+
+### Gmail
+
+Configure Google OAuth in **Settings**, enable the Gmail API in Google Cloud, and register the exact Gmail callback URL shown in **App connections**. Connect Gmail and approve send access. The flow requests `gmail.send` plus account identity, uses PKCE and single-use state bound to the signed-in administrator, and stores the refresh token encrypted.
+
+Connected Gmail becomes the workspace sender for booking notifications and authentication emails. Calendar attachments are preserved. Disconnecting restores the SMTP/Resend sender configured under **Settings → Email**. A Gmail error is reported rather than silently switching the sending account. The email settings test still tests the SMTP/Resend configuration being edited.
+
+The Gmail **Check** button refreshes credentials and verifies account identity without sending email. Actual delivery and token refresh are covered by tests against a simulated Google API. Real-account authorization and mail delivery require your credentials and Google consent.
+
+### Notion
+
+Create a Notion internal integration with read, insert, and update content access. Share a parent page with it. Enter the integration token and parent page URL in **App connections**, then choose **Connect and create bookings database**. This creates a dedicated database under that page; it does not alter an existing database's schema.
+
+New bookings and changes queue background synchronization of meeting titles, guest names and emails, start/end times, booking status, and pending payment state. Retries update the same page using the stable OpenSlot booking ID. Page content and other properties added by users are preserved. Disconnection stops further sync and keeps existing Notion pages. A new connection has a new generation so old queued jobs cannot copy bookings into a different destination.
+
+Use **Sync existing bookings** to opt into copying booking history. The confirmation explains what will be copied. **Check** verifies access and required database properties. Delivery errors appear on the connection card. Requests are paced for Notion's standard 180-per-minute connection budget. Provider Retry-After responses defer jobs without blocking the worker or spending attempts on unsent requests. Tests simulate Notion creation, updates, cancellation, retry recovery, and disconnection; no real workspace is used in automated checks.
+
+App credentials are encrypted in the local database. Model-provider credentials remain in the external agent.
 
 ## Embed on your website
 

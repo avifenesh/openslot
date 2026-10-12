@@ -115,6 +115,7 @@ export type Booking = {
 };
 
 export type APIKey = {
+	connector_id?: string;
 	id: string;
 	name: string;
 	created_at: string;
@@ -186,9 +187,9 @@ export type EmailSettings = {
 	email_from: string;
 	email_from_name: string;
 	resend_api_key_set: boolean; // true when a key is stored; never returned directly
-	// Which path mail actually goes out over. "SMTP fields are filled in" and "mail is
-	// being delivered over SMTP" can differ, so the server reports the live answer.
+	// Configured SMTP/Resend fallback. active_transport reports the actual workspace sender.
 	transport: 'none' | 'smtp' | 'resend_api';
+	active_transport?: 'none' | 'smtp' | 'resend_api' | 'gmail_api';
 	enabled: boolean;
 	/** RSVP tracking for invites Calnode sends: the Resend inbound address RSVPs are routed
 	 *  through (e.g. rsvp@reply.example.com). */

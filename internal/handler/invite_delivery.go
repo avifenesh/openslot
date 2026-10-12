@@ -53,6 +53,11 @@ func calendarInvitee(mode, bookerEmail string) string {
 // Settings → Email. It organizes invites Calnode sends, which puts replies (RSVPs) where
 // the operator already reads mail rather than in any one host's inbox.
 func (h *Handler) inviteSender(ctx context.Context) (name, email string) {
+	if h.apps != nil {
+		if gmail, err := h.apps.Status(ctx, "gmail"); err == nil && gmail.Connected {
+			return "OpenSlot", gmail.Config.Email
+		}
+	}
 	if err := h.db.QueryRowContext(ctx,
 		`SELECT email_from_name, email_from FROM server_settings WHERE id = 1`).Scan(&name, &email); err != nil {
 		h.logger.ErrorContext(ctx, "load invite sender", "error", err)

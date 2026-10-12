@@ -119,6 +119,8 @@
 					<div>
 						Under <span class="font-medium">Authorised redirect URIs</span>, add both:
 						<code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/calendar/callback</code>
+ <code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/apps/gmail/callback</code>
+ <p class="mt-2 text-xs text-muted-foreground">For Gmail sending, also enable the Gmail API and register the Gmail callback above.</p>
 						<code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/auth/callback</code>
 						Click <span class="font-medium">Create</span>. Copy the Client ID and Client Secret shown.
 						{#if !isLocal}
@@ -174,6 +176,8 @@
 						These must be registered on your OAuth client in Google Cloud (Credentials → your client → Authorised redirect URIs).
 					</p>
 					<code class="mt-2 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/calendar/callback</code>
+ <code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/apps/gmail/callback</code>
+ <p class="mt-2 text-xs text-muted-foreground">For Gmail sending, also enable the Gmail API and register the Gmail callback above.</p>
 					<code class="mt-1 block rounded bg-muted px-2 py-1 text-xs font-mono break-all">{redirectBase}/v1/auth/callback</code>
 					{#if !isLocal}
 						<p class="mt-1.5 text-xs text-muted-foreground">

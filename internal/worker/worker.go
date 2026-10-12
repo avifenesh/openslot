@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -222,6 +223,17 @@ func (w *Worker) Poll(ctx context.Context) {
 
 		if err := w.processJob(ctx, j.typ, j.payload); err != nil {
 			w.logger.Error("worker: process job", "error", err, "job_id", j.id, "type", j.typ)
+			var retry interface {
+				RetryAt() time.Time
+				RequestAttempted() bool
+			}
+			hasRetry := errors.As(err, &retry)
+			if hasRetry && !retry.RequestAttempted() && retry.RetryAt().After(time.Now()) {
+				if _, uerr := w.db.ExecContext(ctx, `UPDATE jobs SET status='pending',attempts=attempts-1,last_error=?,run_at=? WHERE id=? AND status='running'`, err.Error(), retry.RetryAt().UTC().Format(time.RFC3339), j.id); uerr != nil {
+					w.logger.Error("worker: defer connector retry", "error", uerr, "job_id", j.id)
+				}
+				continue
+			}
 			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 			if j.attempts >= j.maxAttempts {
 				if _, uerr := w.db.ExecContext(ctx,
@@ -233,7 +245,11 @@ func (w *Worker) Poll(ctx context.Context) {
 					w.markDeliveryFailed(ctx, j.payload)
 				}
 			} else {
-				runAt := time.Now().UTC().Add(backoff(j.attempts)).Format(time.RFC3339)
+				next := time.Now().UTC().Add(backoff(j.attempts))
+				if hasRetry && retry.RetryAt().After(next) {
+					next = retry.RetryAt()
+				}
+				runAt := next.UTC().Format(time.RFC3339)
 				if _, uerr := w.db.ExecContext(ctx,
 					`UPDATE jobs SET status = 'pending', last_error = ?, run_at = ? WHERE id = ?`,
 					err.Error(), runAt, j.id); uerr != nil {

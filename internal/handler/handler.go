@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/calnode/calnode/internal/appconnectors"
 	"github.com/calnode/calnode/internal/booking"
 	"github.com/calnode/calnode/internal/calendar"
 	"github.com/calnode/calnode/internal/livekit"
@@ -21,6 +22,7 @@ import (
 )
 
 type Handler struct {
+	apps              *appconnectors.Service
 	db                *sql.DB
 	logger            *slog.Logger
 	bookingSvc        *booking.Service
@@ -245,6 +247,9 @@ func (h *Handler) SetWebhookSvc(svc *webhook.Service) {
 
 // isEmailEnabled reports whether a real SMTP sender is configured.
 func (h *Handler) isEmailEnabled() bool {
+	if h.apps != nil {
+		return h.apps.EmailEnabled()
+	}
 	if h.live != nil {
 		return h.live.IsEnabled()
 	}

@@ -84,10 +84,10 @@
 	onConfirm={doRevoke}
 />
 
-<svelte:head><title>Connected apps · OpenSlot</title></svelte:head>
+<svelte:head><title>Agent authorizations · OpenSlot</title></svelte:head>
 
 <div class="mb-8">
-	<h1 class="text-2xl font-semibold tracking-tight">Connected apps</h1>
+	<h1 class="text-2xl font-semibold tracking-tight">Agent authorizations</h1>
 	<p class="mt-1 text-sm text-muted-foreground">
 		AI agents and other apps you've connected to your scheduling tools (MCP) via sign-in.
 	</p>
