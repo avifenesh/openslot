@@ -1,6 +1,9 @@
 import { describe, test, expect, afterEach } from 'vitest';
+import { page } from 'vitest/browser';
 import { render, cleanup } from 'vitest-browser-svelte';
 import { today, getLocalTimeZone } from '@internationalized/date';
+import Button from '$lib/components/ui/button/button.svelte';
+import Input from '$lib/components/ui/input/input.svelte';
 import Switch from '$lib/components/ui/switch/switch.svelte';
 import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 import Calendar from '$lib/components/ui/calendar/calendar.svelte';
@@ -17,7 +20,7 @@ function resolveColor(value: string): string {
 	return c;
 }
 
-afterEach(cleanup);
+afterEach(async () => { cleanup(); await page.viewport(1024, 768); });
 
 // These tests guard the silent bug class where a shadcn-svelte component renders
 // with NO state styling because its custom Tailwind variant (data-checked,
@@ -69,5 +72,30 @@ describe('shadcn component state styling', () => {
 		const selected = container.querySelector('[data-bits-day][data-selected]')!;
 		expect(selected).toBeTruthy();
 		expect(getComputedStyle(selected).backgroundColor).toBe(resolveColor('var(--primary)'));
+	});
+});
+
+
+describe('common control sizing and borders', () => {
+	test('default input and button have 40px height', async () => {
+		await page.viewport(1024, 768);
+		const input = await render(Input, {});
+		expect(input.container.querySelector('input')!.getBoundingClientRect().height).toBe(40);
+		const button = await render(Button, {});
+		expect(button.container.querySelector('button')!.getBoundingClientRect().height).toBe(40);
+	});
+
+	test('mobile input has a 44px touch target', async () => {
+		await page.viewport(390, 844);
+		const { container } = await render(Input, {});
+		expect(container.querySelector('input')!.getBoundingClientRect().height).toBe(44);
+	});
+
+	test('ghost buttons keep their transparent border', async () => {
+		const { container } = await render(Button, { props: { variant: 'ghost' } });
+		const style = getComputedStyle(container.querySelector('button')!);
+		expect(style.borderTopWidth).toBe('1px');
+		expect(style.borderTopStyle).toBe('solid');
+		expect(style.borderTopColor).toBe('rgba(0, 0, 0, 0)');
 	});
 });
