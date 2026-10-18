@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ── Frontend build stage ───────────────────────────────────────────────────────
-FROM node:22-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 # Pin pnpm to the version in package.json's `packageManager` field (not @latest)
 # so CI builds are reproducible and match the committed lockfile.
-RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+RUN npm install --global pnpm@10.32.1
 
 WORKDIR /app
 
