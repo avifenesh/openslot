@@ -1,8 +1,16 @@
+const webpack = require("webpack");
+
 module.exports = {
   publicPath: "./",
   // added to fix the build of https://github.com/NethServer/ns8-calnode/pull/114
   transpileDependencies: ["axios"],
   configureWebpack: {
+    plugins: [
+      new webpack.ProvidePlugin({
+        Buffer: ["buffer", "Buffer"],
+        process: "process/browser",
+      }),
+    ],
     resolve: {
       // NS8 UI uses the Node crypto API for UUID random bytes.
       fallback: {
