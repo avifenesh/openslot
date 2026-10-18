@@ -78,7 +78,7 @@ import {
 } from "@nethserver/ns8-ui-lib";
 
 export default {
-  name: "Settings",
+  name: "SettingsView",
   mixins: [
     TaskService,
     IconService,
