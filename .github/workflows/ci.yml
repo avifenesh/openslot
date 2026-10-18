@@ -30,6 +30,11 @@ jobs:
       - name: Frontend checks and build
         working-directory: frontend
         run: pnpm install --frozen-lockfile && pnpm check && pnpm build
+      - name: NS8 UI build
+        working-directory: packaging/ns8/ui
+        run: |
+          npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn install --immutable
+          npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn build
       - name: Go format and build
         shell: bash
         run: |

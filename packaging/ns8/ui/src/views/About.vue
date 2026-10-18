@@ -169,7 +169,7 @@ import {
 } from "@nethserver/ns8-ui-lib";
 
 export default {
-  name: "About",
+  name: "AboutView",
   components: {},
   mixins: [TaskService, QueryParamService, UtilService, PageTitleService],
   pageTitle() {

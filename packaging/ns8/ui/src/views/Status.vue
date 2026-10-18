@@ -266,7 +266,7 @@ import {
 } from "@nethserver/ns8-ui-lib";
 
 export default {
-  name: "Status",
+  name: "StatusView",
   mixins: [
     TaskService,
     QueryParamService,
