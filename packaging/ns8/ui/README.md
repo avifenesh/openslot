@@ -40,7 +40,10 @@ Tests exercise the **built production bundle** in a same-origin iframe, with
 an explicitly mocked NS8 parent, authenticated task endpoints and completion /
 abort / validation events. They cover status/services/images/volumes, settings
 load/save/reload and exact payloads, parent navigation, backup/log links, about,
-mobile viewport, language fallback and task-creation errors. CI runs these tests.
+mobile viewport, language fallback and task-creation errors. The harness serves
+an authentic, pinned NS8 parent stylesheet (see `tests/fixtures/ns8-core/README.md`),
+checks hostname computed styles and desktop/mobile horizontal overflow, and writes
+styled settings screenshots to `test-results/`. CI runs these tests.
 They are not a substitute for install/update/backup/restore tests on a real NS8
 cluster; no live cluster was available for this change.
 

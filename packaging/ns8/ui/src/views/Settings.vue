@@ -23,7 +23,7 @@
       <cv-column>
         <cv-tile light>
           <cv-form @submit.prevent="configureModule">
-            <div class="bx--form-item">
+            <div class="cv-text-input bx--form-item bx--text-input-wrapper">
               <label class="bx--label" for="host">{{ $t('settings.host') }}</label>
               <input
                 id="host"

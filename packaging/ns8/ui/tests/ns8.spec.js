@@ -1,4 +1,31 @@
 import { test, expect } from '@playwright/test';
+import { compile } from 'sass';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// The production module loads this stylesheet from its NS8 parent, not dist/.
+// Compile the pinned, unmodified upstream sources against our locked Carbon.
+const coreCSS = compile(resolve(__dirname, 'fixtures/ns8-core/_core.scss'), {
+  loadPaths: [resolve(__dirname, '../node_modules')],
+  // Match the NS8 parent's webpack tilde resolver without editing the fixture.
+  importers: [{ findFileUrl: url => url.startsWith('~') ? pathToFileURL(resolve(__dirname, '../node_modules', url.slice(1))) : null }],
+  logger: { warn() {}, debug() {} },
+}).css;
+
+async function assertStyledSettings(app, page, info, name) {
+  const host = app.getByRole('textbox');
+  await expect(host).toHaveCSS('height', '40px');
+  await expect(host).toHaveCSS('border-bottom-style', 'solid');
+  await expect(host).toHaveCSS('background-color', 'rgb(244, 244, 244)');
+  const fieldBox = await host.boundingBox();
+  const helperBox = await app.locator('#host-helper').boundingBox();
+  expect(helperBox.y).toBeGreaterThanOrEqual(fieldBox.y + fieldBox.height);
+  expect(helperBox.x).toBe(fieldBox.x);
+  await expect(app.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  expect(await app.locator('html').evaluate(el => el.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.locator('html').evaluate(el => el.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true });
+}
 
 test.afterEach(async ({ page }, info) => {
   if (info.status !== info.expectedStatus) console.log('FRAME DOM:', await page.frames()[1]?.locator('body').innerText());
@@ -37,7 +64,8 @@ async function mount(page, requestedPage = 'status', mode = 'ok', locale = 'en-U
     window.requests = [];
     window.config = { host: 'book.example.com', lets_encrypt: true, http2https: true };
   }, { requestedPage, mode, locale });
-  await page.route('**/harness', route => route.fulfill({ contentType: 'text/html', body: '<iframe title="NS8 module" src="/index.html" style="width:100%;height:95vh;border:0"></iframe>' }));
+  await page.route('**/cluster-admin/css/core.css', route => route.fulfill({ contentType: 'text/css', body: coreCSS }));
+  await page.route('**/harness', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0"><iframe title="NS8 module" src="/index.html" style="display:block;width:100%;height:100vh;border:0"></iframe></body></html>' }));
   await page.route('**/api/**/tasks', async route => {
     expect(route.request().headers().authorization).toBe('Bearer test-token');
     const task = route.request().postDataJSON();
@@ -70,7 +98,9 @@ async function mount(page, requestedPage = 'status', mode = 'ok', locale = 'en-U
   });
   await page.goto('/harness');
   const app = page.frameLocator('iframe');
-  await expect(app.getByText('Booking module', { exact: true }).first()).toBeVisible();
+  // The desktop instance label is intentionally hidden at the mobile breakpoint.
+  await expect(app.locator('#app-side-nav .instance-name')).toHaveText('Booking module');
+  await expect(app.getByRole('heading', { name: requestedPage === 'settings' ? 'Settings' : 'Status', exact: true })).toBeVisible();
   return { app, errors };
 }
 
@@ -87,12 +117,14 @@ test('status, services, images, volumes, backup/log navigation and about survive
   expect(errors).toEqual([]);
 });
 
-test('settings load, edit, save exact NS8 payload, reload and parent navigation', async ({ page }) => {
+test('settings load, edit, save exact NS8 payload, reload and parent navigation', async ({ page }, info) => {
   const { app, errors } = await mount(page, 'settings');
+  await assertStyledSettings(app, page, info, 'desktop-settings');
   const host = app.getByRole('textbox');
   await expect(host).toHaveValue('book.example.com');
   await host.fill('new.example.com');
-  await app.getByRole('checkbox').first().uncheck();
+  await app.getByText("Obtain a Let's Encrypt certificate", { exact: true }).click();
+  await expect(app.getByRole('checkbox').first()).not.toBeChecked();
   await app.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => page.evaluate(() => window.requests.filter(r => r.task.action === 'get-configuration').length)).toBe(2);
   const request = await page.evaluate(() => window.requests.find(r => r.task.action === 'configure-module'));
@@ -122,14 +154,23 @@ test('backup and system log links retain the parent router contract', async ({ p
   expect(errors).toEqual([]);
 });
 
-test('mobile viewport can configure the module through parent navigation', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const { app, errors } = await mount(page, 'settings');
-  await expect(app.getByRole('textbox')).toHaveValue('book.example.com');
-  await app.getByRole('textbox').fill('mobile.example.com');
-  await app.getByRole('button', { name: 'Save' }).click();
-  await expect.poll(() => page.evaluate(() => window.config.host)).toBe('mobile.example.com');
-  expect(errors).toEqual([]);
+test.describe('touch device', () => {
+  test.use({ isMobile: true, hasTouch: true });
+  test('mobile viewport can configure the module through parent navigation', async ({ page }, info) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const { app, errors } = await mount(page, 'settings');
+    await expect(app.locator('#app-side-nav .instance-name')).toBeHidden();
+    await expect(app.locator('#app-side-nav')).toHaveCSS('width', '48px');
+    await assertStyledSettings(app, page, info, 'mobile-settings');
+    await expect(app.getByRole('textbox')).toHaveValue('book.example.com');
+    await app.getByRole('textbox').fill('mobile.example.com');
+    await app.getByRole('button', { name: 'Save' }).click();
+    await expect.poll(() => page.evaluate(() => window.config.host)).toBe('mobile.example.com');
+    await expect.poll(() => page.evaluate(() => window.requests.filter(r => r.task.action === 'get-configuration').length)).toBe(2);
+    await expect(app.getByRole('textbox')).toBeEnabled();
+    await expect(app.getByRole('textbox')).toHaveValue('mobile.example.com');
+    expect(errors).toEqual([]);
+  });
 });
 
 for (const mode of ['validation-failed', 'aborted']) {
