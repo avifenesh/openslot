@@ -740,7 +740,7 @@ as the desired state:
   settings only); the logo and banner are each an **upload**
   (`POST/DELETE /v1/settings/branding/logo` and `.../banner`, public serve at
   `GET /branding/logo` / `GET /branding/banner`) reusing the avatar pipeline:
-  `imaging.Fit` into 600x200 (logo) or 1600x800 (banner) preserving aspect ratio (no
+  `fitUploadedImage` (x/image Catmull-Rom) into 600x160 (logo) or 1600x800 (banner) preserving aspect ratio (no
   crop), re-encoded PNG (keeps transparency), stored on the `/data` volume. Both URLs
   store the relative serve path with a `?v=<ts>` cache-buster; `Handler.applyBranding`
   makes them absolute for emails (relative is fine on same-origin pages). The banner is

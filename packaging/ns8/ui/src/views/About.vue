@@ -44,7 +44,7 @@
                   :src="
                     app.logo
                       ? app.logo
-                      : require('@/assets/module_default_logo.png')
+                      : defaultLogo
                   "
                   :alt="app.name + ' logo'"
                 />
@@ -159,6 +159,8 @@
 </template>
 
 <script>
+import appMetadata from "../../public/metadata.json";
+import defaultLogo from "../assets/module_default_logo.png";
 import to from "await-to-js";
 import { mapState } from "vuex";
 import {
@@ -202,20 +204,10 @@ export default {
     // needed to retrieve module version
     this.listInstalledModules();
   },
-  beforeRouteEnter(to, from, next) {
-    next((vm) => {
-      vm.watchQueryData(vm);
-      vm.urlCheckInterval = vm.initUrlBindingForApp(vm, vm.q.page);
-    });
-  },
-  beforeRouteLeave(to, from, next) {
-    clearInterval(this.urlCheckInterval);
-    next();
-  },
   methods: {
     getModuleInfo() {
       this.loading.moduleInfo = true;
-      const metadata = require("../../public/metadata.json");
+      const metadata = appMetadata;
       this.app = metadata;
       this.loading.moduleInfo = false;
     },

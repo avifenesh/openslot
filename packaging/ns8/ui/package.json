@@ -3,52 +3,40 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint",
-    "watch": "vue-cli-service build --watch",
-    "format": "prettier --write src/"
+    "serve": "vite --host 0.0.0.0 --port 8080",
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "test": "playwright test"
   },
   "dependencies": {
     "@carbon/icons-vue": "^10.37.0",
     "@carbon/vue": "^2.40.0",
     "@nethserver/ns8-ui-lib": "^2.0.0",
+    "@vue/compat": "3.5.44",
     "await-to-js": "^3.0.0",
     "axios": "^1.18.1",
-    "buffer": "^6.0.3",
     "carbon-components": "^10.41.0",
     "core-js": "^3.6.5",
-    "crypto-browserify": "^3.12.1",
     "lottie-web-vue": "^1.2.0",
-    "process": "^0.11.10",
-    "sass": "^1.34.1",
-    "stream-browserify": "^3.0.0",
-    "vm-browserify": "^1.1.2",
-    "vue": "^2.7.0",
-    "vue-axios": "^3.2.4",
+    "vue": "3.5.44",
     "vue-date-fns": "^2.0.1",
     "vue-debounce": "^4.0.0",
     "vue-i18n": "^8.24.4",
-    "vue-loader": "^15.10.0",
     "vue-router": "^3.2.0",
     "vuex": "^3.4.0"
   },
   "devDependencies": {
-    "@babel/core": "^7",
-    "@babel/eslint-parser": "^7.11.0",
-    "@vue/cli-plugin-babel": "^5",
-    "@vue/cli-plugin-eslint": "^5",
-    "@vue/cli-plugin-router": "^5",
-    "@vue/cli-plugin-vuex": "^5",
-    "@vue/cli-service": "^5",
-    "@vue/eslint-config-prettier": "^7",
-    "css-loader": "^6",
-    "eslint": "^7.32.0",
-    "eslint-plugin-prettier": "^4",
-    "eslint-plugin-vue": "^8",
-    "prettier": "^2.2.1",
-    "sass-loader": "^10.1.1",
-    "webpack": "^5"
+    "@playwright/test": "^1.61.1",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/compiler-sfc": "3.5.44",
+    "sass": "^1.34.1",
+    "vite": "^8.3.4"
   },
-  "packageManager": "yarn@4.18.0"
+  "resolutions": {
+    "vue": "3.5.44"
+  },
+  "packageManager": "yarn@4.18.0",
+  "engines": {
+    "node": ">=24"
+  }
 }

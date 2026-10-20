@@ -62,7 +62,7 @@ fi
 echo "Build static UI files with node..."
 buildah run \
     --workingdir=/usr/src/ui \
-    --env="NODE_OPTIONS=--openssl-legacy-provider" \
+    --env="RAYON_NUM_THREADS=2" \
     nodebuilder-ns8-calnode \
     sh -c "corepack enable && yarn install && yarn build"
 

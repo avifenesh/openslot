@@ -1,0 +1,1004 @@
+@import "./carbon";
+@import "./carbon-utils";
+@import "./responsive";
+@import "./utils";
+
+body {
+  height: calc(100vh - 3rem);
+  background-color: $ui-01;
+}
+
+.bx--content {
+  background-color: $ui-01;
+}
+
+.bx--grid.no-padding {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (max-width: $breakpoint-large) {
+  // remove left margin because side menu is not shown on smaller screens
+  #core .bx--content {
+    margin-left: 0;
+  }
+}
+
+a {
+  cursor: pointer;
+}
+
+p {
+  font-size: 100%;
+}
+
+.bx--link:hover {
+  color: $link-02;
+}
+
+.notification {
+  margin-top: 3rem;
+}
+
+.no-margin {
+  margin: 0 !important;
+}
+
+.mg-top-sm {
+  margin-top: $spacing-03 !important;
+}
+
+.mg-top-md {
+  margin-top: $spacing-05 !important;
+}
+
+.mg-top-lg {
+  margin-top: $spacing-06 !important;
+}
+
+.mg-top-xlg {
+  margin-top: $spacing-07 !important;
+}
+
+.mg-top-xxlg {
+  margin-top: $spacing-08 !important;
+}
+
+.mg-bottom-xs {
+  margin-bottom: $spacing-02 !important;
+}
+
+.mg-bottom-sm {
+  margin-bottom: $spacing-03 !important;
+}
+
+.mg-bottom-md {
+  margin-bottom: $spacing-05 !important;
+}
+
+.mg-bottom-lg {
+  margin-bottom: $spacing-06 !important;
+}
+
+.mg-bottom-xlg {
+  margin-bottom: $spacing-07 !important;
+}
+
+.no-mg-top {
+  margin-top: 0 !important;
+}
+
+.no-mg-bottom {
+  margin-bottom: 0 !important;
+}
+
+.no-mg-left {
+  margin-left: 0 !important;
+}
+
+.no-mg-right {
+  margin-right: 0 !important;
+}
+
+.mg-left-xs {
+  margin-left: $spacing-02 !important;
+}
+
+.mg-left-sm {
+  margin-left: $spacing-03 !important;
+}
+
+.mg-left-md {
+  margin-left: $spacing-05 !important;
+}
+
+.mg-right-sm {
+  margin-right: $spacing-03 !important;
+}
+
+.mg-right-md {
+  margin-right: $spacing-05 !important;
+}
+
+@media (max-width: $breakpoint-medium) {
+  // reduce product name font size and padding on smaller screens
+  .cv-header .cv-header-name {
+    font-size: 0.8rem;
+    padding-right: $spacing-05;
+  }
+}
+
+.page-title {
+  margin-top: $spacing-07;
+  margin-bottom: $spacing-06;
+}
+
+// used for page subsections
+.page-subtitle {
+  margin-bottom: $spacing-05;
+}
+
+// used for secondary pages (e.g. where breadcrumb is shown)
+.subpage-title {
+  margin-top: $spacing-06;
+  margin-bottom: $spacing-05;
+}
+
+.breadcrumb {
+  margin-top: $spacing-06;
+}
+
+@media (max-width: 42rem) {
+  .bx--breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-05;
+}
+
+.page-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.page-toolbar-item {
+  margin-top: $spacing-07;
+  margin-bottom: $spacing-06;
+}
+
+// used for secondary pages (e.g. where breadcrumb is shown)
+.subpage-toolbar-item {
+  margin-top: $spacing-06;
+  margin-bottom: $spacing-05;
+}
+
+@media (max-width: $breakpoint-medium) {
+  .page-toolbar {
+    justify-content: flex-start;
+  }
+
+  .page-toolbar-item {
+    margin-top: 0;
+  }
+}
+
+.cv-tile {
+  margin-bottom: $spacing-07;
+}
+
+@media (max-width: $breakpoint-medium) {
+  .cv-tile {
+    margin-bottom: $spacing-05;
+  }
+}
+
+.cv-inline-notification {
+  margin-bottom: $spacing-07;
+}
+
+.title-description {
+  color: $text-02;
+  margin-top: $spacing-03;
+}
+
+.icon-and-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-and-text .icon {
+  margin-right: $spacing-03;
+}
+
+.empty-state-button {
+  margin-top: $spacing-07;
+}
+
+.empty-state-button-no-description {
+  margin-top: $spacing-05;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-tab.bx--tabs--scrollable {
+  margin-bottom: $spacing-06;
+}
+
+.ns-card {
+  .card-content {
+    flex-direction: column;
+    text-align: center;
+
+    .row {
+      margin-bottom: $spacing-05;
+    }
+
+    .row:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  // table-like card content (used in NodeCard, FilterStatusCard, ...)
+  .table-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  .table {
+    display: table;
+  }
+
+  .tr {
+    display: table-row;
+  }
+
+  .td {
+    display: table-cell;
+  }
+}
+
+// form content that appears on toggle activation
+.toggle-dependent {
+  padding-left: $spacing-07;
+  margin-bottom: $spacing-06;
+}
+
+// remove margin-top for cv-toggle without label
+.toggle-without-label .bx--toggle-input__label .bx--toggle__switch {
+  margin-top: 0;
+}
+
+.paragraph-line-height {
+  line-height: 1.5;
+}
+
+// reduce width of wizard buttons on small screens
+// DEPRECATED: also provided by @nethserver/ns8-ui-lib >= 2.2.0 (component styles).
+// Kept for apps built with older ns8-ui-lib versions: remove in the future,
+// when all supported apps require ns8-ui-lib >= 2.2.0. Do not edit.
+@media (max-width: $breakpoint-medium) {
+  .bx--btn-set .bx--btn.wizard-button {
+    width: 33%;
+  }
+}
+
+// overflow menu start
+.bx--overflow-menu-options {
+  z-index: 10000;
+  width: auto !important;
+  min-width: 10rem;
+  max-width: 18rem;
+}
+
+.bx--overflow-menu-options__btn {
+  max-width: none;
+}
+
+.overflow-near-button,
+.overflow-near-button button {
+  height: 3rem;
+  width: 3rem;
+}
+// overflow menu end
+
+// top-right overflow menu start
+.top-right-overflow-menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 3rem;
+  height: 3rem;
+}
+
+.large-overflow-menu {
+  width: 3rem;
+  height: 3rem;
+}
+
+.top-right-overflow-menu .bx--overflow-menu__icon,
+.large-overflow-menu .bx--overflow-menu__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+// top-right overflow menu end
+
+// ghost button on dark background start
+.ghost-button-dark-bg {
+  color: $inverse-link;
+}
+
+.ghost-button-dark-bg:hover {
+  background-color: $hover-secondary;
+  color: $inverse-link;
+}
+// ghost button on dark background end
+
+.external-link-button {
+  text-decoration: none !important;
+}
+
+// key/value settings start
+.key-value-setting {
+  margin-bottom: $spacing-05;
+
+  .label {
+    display: inline-block;
+    margin-right: $spacing-04;
+    font-weight: bold;
+  }
+
+  .value {
+    // wrap long values like urls
+    word-wrap: break-word;
+  }
+}
+
+.key-value-setting.narrow {
+  margin-bottom: $spacing-03;
+}
+// key/value settings end
+
+// status badges start
+.badge-container {
+  display: flex;
+  align-items: center;
+}
+
+.badge-container .green-badge {
+  height: 8px;
+  width: 8px;
+  background-color: $inverse-support-02;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.badge-container .gray-badge {
+  height: 8px;
+  width: 8px;
+  background-color: $ui-04;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.badge-container .yellow-badge {
+  height: 8px;
+  width: 8px;
+  background-color: $support-03;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.left-badge {
+  margin-right: $spacing-03;
+}
+
+.right-badge {
+  margin-left: $spacing-04;
+}
+// status badges end
+
+// global search, app drawer search start
+.global-search input,
+.app-drawer-search input {
+  background-color: $ui-05 !important;
+  color: $ui-01 !important;
+}
+
+.global-search label,
+.app-drawer-search label {
+  display: none;
+}
+
+.global-search .bx--search-close,
+.global-search .bx--search-button,
+.app-drawer-search .bx--search-close,
+.app-drawer-search .bx--search-button {
+  fill: $ui-01;
+}
+
+.global-search .bx--search-close::before,
+.global-search .bx--search-close:hover::before,
+.app-drawer-search .bx--search-close::before,
+.app-drawer-search .bx--search-close:hover::before {
+  background-color: transparent;
+}
+
+.global-search .bx--search-close:hover,
+.global-search .bx--search-button:hover,
+.app-drawer-search .bx--search-close:hover,
+.app-drawer-search .bx--search-button:hover {
+  background-color: $hover-secondary;
+}
+// global search, app drawer search end
+
+// fix cv-search icon
+.cv-search.bx--form-item > div > svg {
+  position: absolute;
+  left: 1rem;
+}
+
+// app side menu start
+#ns8-app .app-content {
+  margin-left: $side-menu-width;
+}
+
+@media (max-width: $breakpoint-large) {
+  // core side menu is collapsed on smaller screens
+  #ns8-app .app-content {
+    margin-left: $side-menu-collapsed-width;
+  }
+}
+
+.bx--side-nav.app-side-nav {
+  background-color: $interactive-02;
+}
+
+.app-side-menu-content {
+  color: $ui-01 !important;
+}
+
+.app-side-menu-content .bx--side-nav__icon.bx--side-nav__icon--small {
+  color: $ui-01 !important;
+}
+
+.app-side-menu-content .bx--side-nav__icon > svg {
+  fill: $ui-01 !important;
+}
+
+.app-side-menu-content a.bx--side-nav__link {
+  height: 3rem !important;
+}
+
+.app-side-menu-content a.bx--side-nav__link > .bx--side-nav__link-text {
+  color: $ui-01 !important;
+}
+
+.app-side-menu-content .cv-side-nav-item-link.bx--side-nav__link:hover {
+  background-color: $ui-05 !important;
+}
+
+.app-side-nav .bx--side-nav__items {
+  padding-top: 0;
+}
+
+.app-side-menu-content .instance-name {
+  height: 3rem;
+  padding-left: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.app-side-menu-content .current-page {
+  background-color: $ui-05;
+}
+
+.app-side-nav .bx--side-nav__item {
+  height: 3rem;
+}
+
+.app-side-menu-content .current-page a::before {
+  background-color: $inverse-support-04;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  content: "";
+}
+
+@media (max-width: $breakpoint-large) {
+  // collapse app side nav on smaller screens...
+  .app-side-nav {
+    width: $side-menu-collapsed-width;
+  }
+
+  // ...but expand it on hover
+  .app-side-nav:hover {
+    width: $side-menu-width;
+  }
+
+  // hide instance name when app side menu is collapsed
+  .app-side-menu-content .instance-name {
+    display: none !important;
+  }
+}
+// app side menu end
+
+// accordion
+.cv-accordion .bx--accordion__content {
+  padding-right: 1rem;
+}
+
+// form elements start
+.cv-form {
+  .cv-text-input,
+  .bx--form-item,
+  .cv-select,
+  .cv-multi-select,
+  .ns-password-input,
+  .cv-combo-box {
+    margin-bottom: $spacing-06;
+  }
+}
+
+.hide-label .bx--label {
+  // hide label for controls with mandatory label (e.g. CvSelect)
+  visibility: hidden;
+}
+
+// fix cv-combo-box clear button overlapping invalid badge
+.cv-combo-box
+  .bx--list-box__invalid-icon
+  + .bx--list-box__field
+  .bx--list-box__selection {
+  right: 4rem !important;
+}
+
+// narrow fields
+.narrow .bx--text-input,
+.narrow .bx--text-input__field-wrapper,
+.cv-select.narrow,
+.cv-multi-select.narrow,
+.cv-combo-box.narrow,
+.cv-number-input.narrow {
+  max-width: 12rem;
+}
+
+// styles for large devices
+@media (min-width: $breakpoint-medium) {
+  // limit form fields width on large devices
+  .bx--text-input,
+  .bx--text-input__field-wrapper,
+  .cv-text-area,
+  .cv-select,
+  .cv-multi-select,
+  .cv-combo-box {
+    max-width: 38rem;
+  }
+}
+
+// fix padding of number input
+.bx--number input[type="number"] {
+  padding-right: 5rem;
+}
+
+// danger highlight for non-textinput elements
+.validation-failed-highlight {
+  outline: 2px solid $danger-01;
+  outline-offset: -2px;
+}
+
+// invalid message for non-textinput elements
+.validation-failed-invalid-message {
+  font-size: 0.75rem;
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  margin: $spacing-02 0 0;
+  display: block;
+  overflow: visible;
+  max-height: 12.5rem;
+  font-weight: 400;
+  color: $danger-01;
+}
+// form elements end
+
+// standard unordered lists
+ul.unordered-list {
+  list-style-type: disc;
+
+  li {
+    margin-left: 1rem;
+  }
+}
+
+// data table start
+.bx--toolbar-search-container-expandable .bx--search {
+  position: static;
+  width: 3rem;
+  width: var(--cds-layout-04, 3rem);
+  height: 100%;
+}
+
+.bx--toolbar-search-container-expandable .bx--search .bx--search-magnifier {
+  left: 0;
+  width: 3rem;
+  width: var(--cds-layout-04, 3rem);
+  height: 3rem;
+  height: var(--cds-layout-04, 3rem);
+  padding: 1rem;
+  padding: var(--cds-spacing-05, 1rem);
+  cursor: pointer;
+  -webkit-transition: background 0.11s cubic-bezier(0, 0, 0.38, 0.9);
+  transition: background 0.11s cubic-bezier(0, 0, 0.38, 0.9);
+  pointer-events: all;
+}
+
+// overflow menu for data table start
+.table-overflow-menu-cell {
+  position: relative;
+}
+
+.table-overflow-menu {
+  position: absolute;
+  top: 4px;
+  right: 1rem;
+}
+// overflow menu for data table end
+
+// show data table pagination in smaller screens too
+.cv-data-table
+  .bx--pagination__left
+  .cv-select.bx--form-item.bx--select__item-count {
+  display: flex !important;
+}
+.cv-data-table .bx--pagination__right .bx--pagination__button {
+  display: flex !important;
+}
+.cv-data-table .bx--pagination__right .bx--select__page-number {
+  display: flex !important;
+}
+.cv-data-table .bx--pagination__right .bx--pagination__text {
+  display: inline-block !important;
+}
+
+// data table filters container
+.data-table-filters {
+  display: flex;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+// data table end
+
+// loader start
+// DEPRECATED: also provided by @nethserver/ns8-ui-lib >= 2.2.0 (component styles).
+// Kept for apps built with older ns8-ui-lib versions: remove in the future,
+// when all supported apps require ns8-ui-lib >= 2.2.0. Do not edit.
+.loader {
+  width: 1rem;
+  height: 1rem;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  border-top: 3px solid currentColor;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  animation: spin 0.5s linear infinite;
+}
+
+.loader-large {
+  width: 3rem;
+  height: 3rem;
+  border: 6px solid transparent;
+  border-radius: 50%;
+  border-top: 6px solid currentColor;
+  border-right: 6px solid currentColor;
+  border-bottom: 6px solid currentColor;
+  animation: spin 0.5s linear infinite;
+}
+
+.loader-theme {
+  color: $interactive-01;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+// loader end
+
+// animation for expandable chevron start
+.toggle-expand > svg {
+  transition: transform 110ms;
+}
+
+.toggle-expand.expanded > svg {
+  transform: rotate(180deg);
+}
+// animation for expandable chevron end
+
+// modal with full-width content
+.no-pad-modal .bx--modal-content {
+  padding-right: 1rem !important;
+}
+
+// remove colored outline when clicking modal content
+.bx--modal-content:focus {
+  outline: none !important;
+}
+
+// branding colors for NsProgressBar start
+// DEPRECATED: also provided by @nethserver/ns8-ui-lib >= 2.2.0 (component styles).
+// Kept for apps built with older ns8-ui-lib versions: remove in the future,
+// when all supported apps require ns8-ui-lib >= 2.2.0. Do not edit.
+.progress-bar-container .line,
+.progress-bar-container .progress-line,
+.progress-bar-container .indeterminate-line,
+.progress-bar-container .indeterminate-subline {
+  background: $interactive-01;
+}
+
+.progress-bar-container .line.healthy,
+.progress-bar-container .progress-line.healthy,
+.progress-bar-container .indeterminate-line.healthy,
+.progress-bar-container .indeterminate-subline.healthy {
+  background: $support-02;
+}
+
+.progress-bar-container .line.warning,
+.progress-bar-container .progress-line.warning,
+.progress-bar-container .indeterminate-line.warning,
+.progress-bar-container .indeterminate-subline.warning {
+  background: #eb991e;
+}
+
+.progress-bar-container .line.danger,
+.progress-bar-container .progress-line.danger,
+.progress-bar-container .indeterminate-line.danger,
+.progress-bar-container .indeterminate-subline.danger {
+  background: $danger-01;
+}
+// branding colors for NsProgressBar end
+
+// status colors start
+.ns-success {
+  color: $support-02 !important;
+  fill: $support-02 !important;
+}
+
+.ns-error {
+  color: $danger-01 !important;
+  fill: $danger-01 !important;
+}
+
+.ns-warning {
+  color: #ff832b !important;
+  fill: #ff832b !important;
+}
+
+.ns-info {
+  color: $support-04 !important;
+  fill: $support-04 !important;
+}
+
+.ns-interactive {
+  color: $interactive-01 !important;
+  fill: $interactive-01 !important;
+}
+
+.ns-success-dark-bg {
+  color: $inverse-support-02 !important;
+  fill: $inverse-support-02 !important;
+}
+
+.ns-error-dark-bg {
+  color: $inverse-support-01 !important;
+  fill: $inverse-support-01 !important;
+}
+
+.ns-warning-dark-bg {
+  color: $inverse-support-03 !important;
+  fill: $inverse-support-03 !important;
+}
+
+.ns-info-dark-bg {
+  color: $inverse-support-04 !important;
+  fill: $inverse-support-04 !important;
+}
+
+.ns-disabled {
+  color: #767676 !important;
+  fill: #767676 !important;
+}
+// status colors end
+
+// colors for NsStatusCard and NsSystemdServiceCard start
+// DEPRECATED: also provided by @nethserver/ns8-ui-lib >= 2.2.0 (component styles).
+// Kept for apps built with older ns8-ui-lib versions: remove in the future,
+// when all supported apps require ns8-ui-lib >= 2.2.0. Do not edit.
+.status-card .success-icon,
+.service-card .success-icon {
+  color: $support-02;
+}
+
+.status-card .error-icon,
+.service-card .error-icon {
+  color: $danger-01;
+}
+
+.status-card .warning-icon,
+.service-card .warning-icon {
+  color: #eb991e;
+}
+// colors for NsStatusCard and NsSystemdServiceCard end
+
+// interactive tooltip start
+.cv-interactive-tooltip {
+  display: inline-block;
+
+  .bx--tooltip__label .bx--tooltip__trigger {
+    margin-left: 0;
+  }
+}
+
+.tooltip-with-text-trigger .bx--tooltip__trigger:not(.bx--btn--icon-only) {
+  font-size: 14px !important;
+  color: $interactive-01;
+}
+
+.bx--tooltip .bx--tooltip__content {
+  line-height: 1.28572;
+}
+
+// info tooltip
+.info.bx--tooltip__trigger svg,
+.info.bx--tooltip__trigger:hover svg,
+.info.bx--tooltip__trigger:focus svg,
+.info .bx--tooltip__trigger svg,
+.info .bx--tooltip__trigger:hover svg,
+.info .bx--tooltip__trigger:focus svg {
+  fill: $support-04;
+}
+
+// don't change icon color when hovering certification level badge
+.bx--tooltip__trigger:hover .cv-tag svg,
+.bx--tooltip__trigger:focus .cv-tag svg {
+  fill: currentColor;
+}
+// interactive tooltip end
+
+// hint tooltip start
+.hint {
+  width: 0;
+  height: 0;
+  position: relative;
+}
+
+.hint-button {
+  margin-top: $spacing-05 !important;
+}
+
+.hint .bx--tooltip__trigger:not(.bx--btn--icon-only):focus {
+  outline: none;
+  fill: none;
+}
+// hint tooltip end
+
+.min-height-card {
+  min-height: 9rem;
+}
+
+// NsNodeCard start
+.node-card .warning {
+  color: $danger-01;
+}
+// NsNodeCard end
+
+// warning for pages optimized for landscape mode (e.g. pages containing tables)
+.landscape-warning {
+  display: none;
+}
+@media (max-width: 639px) {
+  // show warning only for screens smaller than 640px
+  .landscape-warning {
+    display: block;
+  }
+}
+
+// highlight an element with a colored border
+.highlight-me {
+  outline-offset: -2px;
+  outline: 2px solid $interactive-01;
+}
+
+// highlight an anchor with a fading background
+@keyframes highlightAnchor {
+  from {
+    background-color: $interactive-01;
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.highlight-anchor {
+  animation-name: highlightAnchor;
+  animation-duration: 2s;
+}
+// end highlight an anchor with a fading background
+
+// use &bull; to separate items on the same row
+.bullet-separator {
+  margin-left: $spacing-03;
+  margin-right: $spacing-03;
+}
+
+// NsTimePicker start
+// DEPRECATED: also provided by @nethserver/ns8-ui-lib >= 2.2.0 (component styles).
+// Kept for apps built with older ns8-ui-lib versions: remove in the future,
+// when all supported apps require ns8-ui-lib >= 2.2.0. Do not edit.
+
+// brand color outline on focus
+.ns-time-picker .time-picker-field input:active,
+.ns-time-picker .time-picker-field input:focus {
+  outline: 2px solid $interactive-01;
+  outline-offset: -2px;
+}
+
+// hover color for clear button
+.ns-time-picker .time-picker-field .clear-btn:hover {
+  color: $ui-05;
+}
+
+// background color of selected time inside dropdown
+.ns-time-picker .vue__time-picker-dropdown ul li:not([disabled]).active,
+.ns-time-picker .vue__time-picker-dropdown ul li:not([disabled]).active:focus,
+.ns-time-picker .vue__time-picker-dropdown ul li:not([disabled]).active:hover,
+.ns-time-picker .vue__time-picker .dropdown ul li:not([disabled]).active,
+.ns-time-picker .vue__time-picker .dropdown ul li:not([disabled]).active:focus,
+.ns-time-picker .vue__time-picker .dropdown ul li:not([disabled]).active:hover {
+  background-color: $interactive-01;
+}
+// NsTimePicker end
+
+// fade transition start
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+// fade transition end
+
+// keep modal floating on the backdrop background
+@media (min-width: $breakpoint-medium) {
+  .bx--modal {
+    align-items: start;
+    overflow-y: auto;
+  }
+
+  .bx--modal-container {
+    max-height: none;
+    margin-top: 120px;
+    margin-bottom: 120px;
+  }
+}

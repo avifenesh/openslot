@@ -23,15 +23,21 @@
       <cv-column>
         <cv-tile light>
           <cv-form @submit.prevent="configureModule">
-            <cv-text-input
-              :label="$t('settings.host')"
-              :helper-text="$t('settings.host_helper')"
-              v-model="host"
-              placeholder="book.example.com"
-              :disabled="loading.getConfiguration || loading.configureModule"
-              :invalid-message="error.host"
-              ref="host"
-            ></cv-text-input>
+            <div class="cv-text-input bx--form-item bx--text-input-wrapper">
+              <label class="bx--label" for="host">{{ $t('settings.host') }}</label>
+              <input
+                id="host"
+                class="bx--text-input"
+                v-model="host"
+                placeholder="book.example.com"
+                :disabled="loading.getConfiguration || loading.configureModule"
+                :aria-invalid="Boolean(error.host)"
+                aria-describedby="host-helper host-error"
+                ref="host"
+              />
+              <div id="host-helper" class="bx--form__helper-text">{{ $t('settings.host_helper') }}</div>
+              <div v-if="error.host" id="host-error" role="alert">{{ error.host }}</div>
+            </div>
             <cv-checkbox
               :label="$t('settings.lets_encrypt')"
               v-model="letsEncrypt"
@@ -111,16 +117,6 @@ export default {
   },
   computed: {
     ...mapState(["instanceName", "core", "appName"]),
-  },
-  beforeRouteEnter(to, from, next) {
-    next((vm) => {
-      vm.watchQueryData(vm);
-      vm.urlCheckInterval = vm.initUrlBindingForApp(vm, vm.q.page);
-    });
-  },
-  beforeRouteLeave(to, from, next) {
-    clearInterval(this.urlCheckInterval);
-    next();
   },
   created() {
     this.getConfiguration();

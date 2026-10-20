@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-
-	"github.com/disintegration/imaging"
 )
 
 // avatarExts covers formats that may have been saved before the JPEG migration.
@@ -52,7 +50,7 @@ func (h *Handler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fit within 400×400, preserving aspect ratio; never upscale.
-	resized := imaging.Fit(img, 400, 400, imaging.Lanczos)
+	resized := fitUploadedImage(img, 400, 400)
 
 	// Encode to JPEG.
 	var out bytes.Buffer

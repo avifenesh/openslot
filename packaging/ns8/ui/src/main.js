@@ -12,8 +12,10 @@ Vue.use(CarbonComponentsVue);
 
 import axios from "axios";
 axios.defaults.timeout = 10000;
-import VueAxios from "vue-axios";
-Vue.use(VueAxios, axios);
+// NS8 mixins expect the Vue 2 instance property, not vue-axios's
+// version-detected Vue 3 application registration.
+Vue.prototype.axios = axios;
+Vue.prototype.$http = axios;
 
 import ns8Lib from "@nethserver/ns8-ui-lib";
 Vue.use(ns8Lib);

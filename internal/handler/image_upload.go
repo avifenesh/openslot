@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"math"
 	"net/http"
 
+	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
@@ -31,6 +34,74 @@ import (
 // (25 MP is about 6000x4167) and costs at most ~100 MB to decode at 4 bytes per pixel. The
 // result is resized to at most 1600x800 regardless, so nothing larger is ever useful.
 const maxUploadPixels = 25_000_000
+
+// fitUploadedImage preserves aspect ratio, never upscales, and retains alpha.
+// Use x/image's maintained scaler rather than imaging's unpatched scanner.
+func fitUploadedImage(src image.Image, maxWidth, maxHeight int) image.Image {
+	bounds := src.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= maxWidth && height <= maxHeight {
+		return src
+	}
+	if width*maxHeight > height*maxWidth {
+		height = max(1, height*maxWidth/width)
+		width = maxWidth
+	} else {
+		width = max(1, width*maxHeight/height)
+		height = maxHeight
+	}
+	// Kernel.Scale allocates coefficient tables proportional to source dimensions
+	// and a float intermediate proportional to destination width * source height.
+	// Area-prefilter large reductions to at most twice the final size per axis:
+	// scratch space is then bounded by the output, even for a 1x25M upload.
+	// Unlike ApproxBiLinear, area integration includes every source pixel (no
+	// aliasing from sparse samples). Catmull-Rom finishes the last <=2x reduction.
+	// The two-stage filter is slightly softer than direct Catmull-Rom on large
+	// reductions; modest reductions retain the exact existing filter.
+	if bounds.Dx() > 2*width || bounds.Dy() > 2*height {
+		src = areaPrefilter(src, min(bounds.Dx(), 2*width), min(bounds.Dy(), 2*height))
+		bounds = src.Bounds()
+	}
+	dst := image.NewNRGBA(image.Rect(0, 0, width, height))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, draw.Src, nil)
+	return dst
+}
+
+// areaPrefilter averages source pixel coverage without source-sized tables or
+// intermediates. RGBA64 keeps premultiplied alpha and precision for the final
+// filter, avoiding dark fringes around transparent pixels. Each source pixel is
+// visited at most four times; storage is exactly 8*width*height bytes.
+func areaPrefilter(src image.Image, width, height int) *image.RGBA64 {
+	bounds := src.Bounds()
+	dst := image.NewRGBA64(image.Rect(0, 0, width, height))
+	sx, sy := float64(bounds.Dx())/float64(width), float64(bounds.Dy())/float64(height)
+	for y := 0; y < height; y++ {
+		y0, y1 := float64(y)*sy, float64(y+1)*sy
+		for x := 0; x < width; x++ {
+			x0, x1 := float64(x)*sx, float64(x+1)*sx
+			var sum [4]float64
+			for iy := int(y0); iy < min(int(math.Ceil(y1)), bounds.Dy()); iy++ {
+				wy := min(y1, float64(iy+1)) - max(y0, float64(iy))
+				for ix := int(x0); ix < min(int(math.Ceil(x1)), bounds.Dx()); ix++ {
+					weight := wy * (min(x1, float64(ix+1)) - max(x0, float64(ix)))
+					r, g, b, a := src.At(bounds.Min.X+ix, bounds.Min.Y+iy).RGBA()
+					sum[0] += float64(r) * weight
+					sum[1] += float64(g) * weight
+					sum[2] += float64(b) * weight
+					sum[3] += float64(a) * weight
+				}
+			}
+			area := (x1 - x0) * (y1 - y0)
+			dst.SetRGBA64(x, y, color.RGBA64{
+				R: uint16(min(65535, math.Round(sum[0]/area))),
+				G: uint16(min(65535, math.Round(sum[1]/area))),
+				B: uint16(min(65535, math.Round(sum[2]/area))),
+				A: uint16(min(65535, math.Round(sum[3]/area))),
+			})
+		}
+	}
+	return dst
+}
 
 // decodeUploadedImage validates and decodes an uploaded image.
 //

@@ -5,7 +5,6 @@ go 1.26.0
 toolchain go1.26.6
 
 require (
-	github.com/disintegration/imaging v1.6.2
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pressly/goose/v3 v3.27.1

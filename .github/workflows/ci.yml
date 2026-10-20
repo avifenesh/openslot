@@ -34,7 +34,9 @@ jobs:
         working-directory: packaging/ns8/ui
         run: |
           npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn install --immutable
-          npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn build
+          RAYON_NUM_THREADS=2 npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn build
+          npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn exec playwright install --with-deps chromium
+          npm exec --yes --package=@yarnpkg/cli-dist@4.18.0 -- yarn test
       - name: Go format and build
         shell: bash
         run: |

@@ -22,6 +22,10 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
+# Browser test artifacts
+/test-results
+/playwright-report
+
 # Yarn v4 node-modules rules
 .yarn/*
 !.yarn/patches

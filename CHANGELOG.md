@@ -11,6 +11,20 @@ exact tag (`ghcr.io/calnode/calnode:0.1.0`) if you need stability between upgrad
 
 ## [Unreleased]
 
+### Security
+- Replace the NS8 UI's Vue 2 runtime with the official Vue 3.5.44 compatibility
+  build (GHSA-5j4c-8p2g-v4jx), retaining the existing NS8 settings, status, about,
+  backup/log links and parent task/event contract. Replace Vue CLI / webpack with
+  Vite; remove their vulnerable dev-server, middleware, serialization and loader
+  dependencies. PostCSS now resolves to 8.5.31. Replace Node crypto polyfills with
+  Web Crypto for UUID entropy, removing elliptic (GHSA-848j-6mx2-7j84). The NS8
+  development toolchain now requires Node 24+; the application runtime is unchanged.
+- Remove the unpatched imaging dependency (GHSA-q7pp-wcgr-pffx). Avatar, branding
+  logo and banner resizing now use the existing maintained `golang.org/x/image`
+  scaler, preserving aspect ratio, alpha, size limits, no-upscale behavior and
+  JPEG/PNG output formats. Resampling changes from Lanczos to Catmull-Rom;
+  existing saved images are unchanged.
+
 ### Added
 - **Calendar invites can come from Calnode instead of the host's calendar.** A new
   per-event-type setting, *Calendar invite → Sent by*. The default is unchanged: the host's
