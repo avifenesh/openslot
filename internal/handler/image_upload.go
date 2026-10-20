@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 
+	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
@@ -31,6 +32,26 @@ import (
 // (25 MP is about 6000x4167) and costs at most ~100 MB to decode at 4 bytes per pixel. The
 // result is resized to at most 1600x800 regardless, so nothing larger is ever useful.
 const maxUploadPixels = 25_000_000
+
+// fitUploadedImage preserves aspect ratio, never upscales, and retains alpha.
+// Use x/image's maintained scaler rather than imaging's unpatched scanner.
+func fitUploadedImage(src image.Image, maxWidth, maxHeight int) image.Image {
+	bounds := src.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= maxWidth && height <= maxHeight {
+		return src
+	}
+	if width*maxHeight > height*maxWidth {
+		height = max(1, height*maxWidth/width)
+		width = maxWidth
+	} else {
+		width = max(1, width*maxHeight/height)
+		height = maxHeight
+	}
+	dst := image.NewNRGBA(image.Rect(0, 0, width, height))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, draw.Src, nil)
+	return dst
+}
 
 // decodeUploadedImage validates and decodes an uploaded image.
 //

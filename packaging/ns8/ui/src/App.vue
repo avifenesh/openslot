@@ -13,6 +13,7 @@
 </template>
 
 <script>
+import appMetadata from "../public/metadata.json";
 import AppSideMenu from "./components/AppSideMenu";
 import AppMobileSideMenu from "./components/AppMobileSideMenu";
 import { mapState, mapActions } from "vuex";
@@ -40,16 +41,15 @@ export default {
     this.getInstanceLabel();
     this.setAppName();
 
-    // listen to change route events
-    const context = this;
-    window.addEventListener(
-      "changeRoute",
-      function (e) {
-        const requestedPage = e.detail;
-        context.$router.replace(requestedPage);
-      },
-      false
-    );
+    // The parent owns the public URL. Keep the iframe router in sync without
+    // relying on Vue Router 3's legacy beforeRouteEnter callback queue.
+    this.routeListener = (event) => this.$router.replace(event.detail);
+    window.addEventListener("changeRoute", this.routeListener);
+    this.routeTimer = setInterval(() => {
+      const page = this.getQueryParamsForApp().page || "status";
+      const path = page === "status" ? "/" : "/" + page;
+      if (this.$route.path !== path) this.$router.replace(path);
+    }, 500);
 
     // configure global shortcuts
     core.$root.$emit("configureKeyboardShortcuts", window);
@@ -60,6 +60,10 @@ export default {
     if (requestedPage != "status") {
       this.$router.replace(requestedPage);
     }
+  },
+  beforeUnmount() {
+    clearInterval(this.routeTimer);
+    window.removeEventListener("changeRoute", this.routeListener);
   },
   methods: {
     ...mapActions([
@@ -112,7 +116,7 @@ export default {
       this.setInstanceLabelInStore(taskResult.output.name);
     },
     setAppName() {
-      const metadata = require("../public/metadata.json");
+      const metadata = appMetadata;
       const appName = metadata.name;
       this.setAppNameInStore(appName);
     },

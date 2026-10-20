@@ -16,7 +16,6 @@ import (
 
 	"github.com/calnode/calnode/internal/i18n"
 	"github.com/calnode/calnode/internal/mailer"
-	"github.com/disintegration/imaging"
 )
 
 // logoPath is the served path for the instance logo. The stored value carries a
@@ -265,7 +264,7 @@ func (h *Handler) UploadBrandingLogo(w http.ResponseWriter, r *http.Request) {
 	// square, so we don't crop server-side (the client does any cropping) — the
 	// display height-constrains it to ~30px, and ~160px tall covers retina/larger
 	// page display while keeping the file small. BestCompression trims size further.
-	resized := imaging.Fit(img, 600, 160, imaging.Lanczos)
+	resized := fitUploadedImage(img, 600, 160)
 	var out bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.BestCompression}
 	if err := enc.Encode(&out, resized); err != nil {
@@ -392,7 +391,7 @@ func (h *Handler) UploadBrandingBanner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resized := imaging.Fit(img, 1600, 800, imaging.Lanczos)
+	resized := fitUploadedImage(img, 1600, 800)
 	var out bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.BestCompression}
 	if err := enc.Encode(&out, resized); err != nil {

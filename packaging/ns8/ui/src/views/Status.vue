@@ -161,7 +161,7 @@
             >
             </NsEmptyState>
             <cv-structured-list v-else>
-              <template slot="headings">
+              <template #headings>
                 <cv-structured-list-heading>{{
                   $t("status.name")
                 }}</cv-structured-list-heading>
@@ -172,7 +172,7 @@
                   $t("status.created")
                 }}</cv-structured-list-heading>
               </template>
-              <template slot="items">
+              <template #items>
                 <cv-structured-list-item
                   v-for="(image, index) in status.images"
                   :key="index"
@@ -214,7 +214,7 @@
             >
             </NsEmptyState>
             <cv-structured-list v-else>
-              <template slot="headings">
+              <template #headings>
                 <cv-structured-list-heading>{{
                   $t("status.name")
                 }}</cv-structured-list-heading>
@@ -225,7 +225,7 @@
                   $t("status.created")
                 }}</cv-structured-list-heading>
               </template>
-              <template slot="items">
+              <template #items>
                 <cv-structured-list-item
                   v-for="(volume, index) in status.volumes"
                   :key="index"
@@ -325,16 +325,6 @@ export default {
         return "";
       }
     },
-  },
-  beforeRouteEnter(to, from, next) {
-    next((vm) => {
-      vm.watchQueryData(vm);
-      vm.urlCheckInterval = vm.initUrlBindingForApp(vm, vm.q.page);
-    });
-  },
-  beforeRouteLeave(to, from, next) {
-    clearInterval(this.urlCheckInterval);
-    next();
   },
   mounted() {
     this.redirectTimeout = setTimeout(
