@@ -103,11 +103,15 @@ func storeSecrets(command string, values map[string]string) ([]string, error) {
 	if len(argv) == 0 {
 		return nil, nil
 	}
-	var notes []string
-	for _, key := range []string{"CALNODE_ENCRYPTION_KEY", "CALNODE_RECOVERY_SECRET"} {
+	keys := []string{"CALNODE_ENCRYPTION_KEY", "CALNODE_RECOVERY_SECRET"}
+	// Check every guard before storing anything, so a refusal leaves no orphaned entry.
+	for _, key := range keys {
 		if os.Getenv(key) != "" {
 			return nil, fmt.Errorf("%s is already set in the environment (an existing installation's key); unset it before creating a new installation with %s", key, SecretStoreEnv)
 		}
+	}
+	var notes []string
+	for _, key := range keys {
 		name := SecretNames[key]
 		cmd := exec.Command(argv[0], append(argv[1:], name)...)
 		cmd.Stdin = strings.NewReader(values[key])

@@ -101,6 +101,28 @@ func TestInitStoresSecretsOutsideConfig(t *testing.T) {
 		t.Fatal("Init must refuse while an existing key is in the environment")
 	}
 }
+func TestInitRecoveryOnlyEnvironmentStoresNothing(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	os.Mkdir(store, 0700)
+	helper := filepath.Join(root, "fake-store")
+	os.WriteFile(helper, []byte("#!/bin/sh\n[ -e \""+store+"/$2\" ] && exit 3\ncat > \""+store+"/$2\"\n"), 0755)
+	t.Setenv(SecretStoreEnv, helper+" --new")
+	t.Setenv("CALNODE_ENCRYPTION_KEY", "")
+	t.Setenv("CALNODE_RECOVERY_SECRET", "existing")
+	if _, e := Init(filepath.Join(root, "config.env"), filepath.Join(root, "data")); e == nil {
+		t.Fatal("Init must refuse while an existing recovery secret is in the environment")
+	}
+	if entries, _ := os.ReadDir(store); len(entries) != 0 {
+		t.Fatal("a refused Init left a stored secret behind")
+	}
+	// After unsetting the variable, a retry succeeds.
+	t.Setenv("CALNODE_RECOVERY_SECRET", "")
+	if created, e := Init(filepath.Join(root, "config.env"), filepath.Join(root, "data")); e != nil || !created {
+		t.Fatal("retry failed", created, e)
+	}
+}
+
 func TestInitRefusesOrphanedData(t *testing.T) {
 	root := t.TempDir()
 	data := filepath.Join(root, "data")
