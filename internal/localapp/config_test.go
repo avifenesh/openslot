@@ -10,6 +10,7 @@ import (
 )
 
 func TestInitPersistsPrivateKeysAndQuotedStorage(t *testing.T) {
+	t.Setenv(SecretStoreEnv, "")
 	root := t.TempDir()
 	path := filepath.Join(root, "settings", "config.env")
 	data := filepath.Join(root, "storage with $dollar and spaces")
@@ -47,6 +48,81 @@ func TestInitPersistsPrivateKeysAndQuotedStorage(t *testing.T) {
 		t.Fatal("existing secrets were replaced")
 	}
 }
+
+// With OPENSLOT_SECRET_STORE the generated secrets go to the store command on
+// stdin, never to config.env or argv.
+func TestInitStoresSecretsOutsideConfig(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	os.Mkdir(store, 0700)
+	helper := filepath.Join(root, "fake-store")
+	os.WriteFile(helper, []byte("#!/bin/sh\n[ \"$1\" = --new ] || exit 9\n[ -e \""+store+"/$2\" ] && exit 3\necho \"$*\" >> \""+store+"/argv\"\ncat > \""+store+"/$2\"\n"), 0755)
+	t.Setenv(SecretStoreEnv, helper+" --new")
+	t.Setenv("CALNODE_ENCRYPTION_KEY", "")
+	t.Setenv("CALNODE_RECOVERY_SECRET", "")
+	path := filepath.Join(root, "config.env")
+	created, e := Init(path, filepath.Join(root, "data"))
+	if e != nil || !created {
+		t.Fatal(created, e)
+	}
+	values, _ := godotenv.Read(path)
+	if _, ok := values["CALNODE_ENCRYPTION_KEY"]; ok {
+		t.Fatal("encryption key written to config.env")
+	}
+	if _, ok := values["CALNODE_RECOVERY_SECRET"]; ok {
+		t.Fatal("recovery secret written to config.env")
+	}
+	key, _ := os.ReadFile(filepath.Join(store, "openslot-calnode-encryption-key"))
+	rec, _ := os.ReadFile(filepath.Join(store, "openslot-calnode-recovery-secret"))
+	if len(key) != 64 || len(rec) != 64 || string(key) == string(rec) {
+		t.Fatal("secrets not stored")
+	}
+	argv, _ := os.ReadFile(filepath.Join(store, "argv"))
+	if strings.Contains(string(argv), string(key)) || strings.Contains(string(argv), string(rec)) {
+		t.Fatal("a secret reached argv")
+	}
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), string(key)) || strings.Contains(string(raw), string(rec)) {
+		t.Fatal("a secret reached config.env")
+	}
+	// A second installation must not replace the first one's keys.
+	if _, e := Init(filepath.Join(root, "second.env"), filepath.Join(root, "data2")); e == nil {
+		t.Fatal("second Init overwrote stored secrets")
+	}
+	if again, _ := os.ReadFile(filepath.Join(store, "openslot-calnode-encryption-key")); string(again) != string(key) {
+		t.Fatal("stored key changed")
+	}
+	if _, e := os.Stat(filepath.Join(root, "second.env")); e == nil {
+		t.Fatal("config written although storing its secrets failed")
+	}
+	// An existing installation's key in the environment blocks a new one.
+	t.Setenv("CALNODE_ENCRYPTION_KEY", "existing")
+	if _, e := Init(filepath.Join(root, "third.env"), filepath.Join(root, "data3")); e == nil {
+		t.Fatal("Init must refuse while an existing key is in the environment")
+	}
+}
+func TestInitRecoveryOnlyEnvironmentStoresNothing(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	os.Mkdir(store, 0700)
+	helper := filepath.Join(root, "fake-store")
+	os.WriteFile(helper, []byte("#!/bin/sh\n[ -e \""+store+"/$2\" ] && exit 3\ncat > \""+store+"/$2\"\n"), 0755)
+	t.Setenv(SecretStoreEnv, helper+" --new")
+	t.Setenv("CALNODE_ENCRYPTION_KEY", "")
+	t.Setenv("CALNODE_RECOVERY_SECRET", "existing")
+	if _, e := Init(filepath.Join(root, "config.env"), filepath.Join(root, "data")); e == nil {
+		t.Fatal("Init must refuse while an existing recovery secret is in the environment")
+	}
+	if entries, _ := os.ReadDir(store); len(entries) != 0 {
+		t.Fatal("a refused Init left a stored secret behind")
+	}
+	// After unsetting the variable, a retry succeeds.
+	t.Setenv("CALNODE_RECOVERY_SECRET", "")
+	if created, e := Init(filepath.Join(root, "config.env"), filepath.Join(root, "data")); e != nil || !created {
+		t.Fatal("retry failed", created, e)
+	}
+}
+
 func TestInitRefusesOrphanedData(t *testing.T) {
 	root := t.TempDir()
 	data := filepath.Join(root, "data")
