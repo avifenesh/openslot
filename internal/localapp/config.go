@@ -2,12 +2,14 @@
 package localapp
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -79,6 +81,47 @@ func randomSecret() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// SecretStoreEnv names a command that keeps secrets outside the configuration
+// file, for example an OS keyring helper. Init runs it as `COMMAND... NAME` with
+// the secret on stdin, once per entry of SecretNames, and leaves those keys out
+// of config.env. The server then needs them in its environment (a launcher such
+// as systemd LoadCredential= or a keyring wrapper supplies them). The command
+// must refuse to replace an existing secret, so a second installation can never
+// overwrite the key of the first.
+const SecretStoreEnv = "OPENSLOT_SECRET_STORE"
+
+// SecretNames maps each generated secret to the name Init stores it under.
+var SecretNames = map[string]string{
+	"CALNODE_ENCRYPTION_KEY":  "openslot-calnode-encryption-key",
+	"CALNODE_RECOVERY_SECRET": "openslot-calnode-recovery-secret",
+}
+
+// storeSecrets hands each generated secret to the SecretStoreEnv command and
+// removes it from values. It returns the comment lines that replace them.
+func storeSecrets(command string, values map[string]string) ([]string, error) {
+	argv := strings.Fields(command)
+	if len(argv) == 0 {
+		return nil, nil
+	}
+	var notes []string
+	for _, key := range []string{"CALNODE_ENCRYPTION_KEY", "CALNODE_RECOVERY_SECRET"} {
+		if os.Getenv(key) != "" {
+			return nil, fmt.Errorf("%s is already set in the environment (an existing installation's key); unset it before creating a new installation with %s", key, SecretStoreEnv)
+		}
+		name := SecretNames[key]
+		cmd := exec.Command(argv[0], append(argv[1:], name)...)
+		cmd.Stdin = strings.NewReader(values[key])
+		var stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = nil, &stderr
+		if e := cmd.Run(); e != nil {
+			return nil, fmt.Errorf("%s %s: %v: %s", argv[0], name, e, strings.TrimSpace(stderr.String()))
+		}
+		delete(values, key)
+		notes = append(notes, fmt.Sprintf("# %s is kept outside this file (%s stored it as %s); supply it in the environment.", key, argv[0], name))
+	}
+	return notes, nil
+}
+
 // Init creates configuration once. Existing credentials are never overwritten.
 func Init(path, data string) (bool, error) {
 	if _, e := os.Stat(path); e == nil {
@@ -112,6 +155,10 @@ func Init(path, data string) (bool, error) {
 		return false, e
 	}
 	values := map[string]string{"PORT": "8788", "BIND_HOST": "127.0.0.1", "BASE_URL": "http://127.0.0.1:8788", "DATABASE_URL": "sqlite://" + filepath.Join(data, "openslot.db"), "DATA_DIR": data, "EMAIL_FROM_NAME": "OpenSlot", "CALNODE_ENCRYPTION_KEY": key, "CALNODE_RECOVERY_SECRET": recovery}
+	notes, e := storeSecrets(os.Getenv(SecretStoreEnv), values)
+	if e != nil {
+		return false, e
+	}
 	raw, e := godotenv.Marshal(values)
 	if e != nil {
 		return false, e
@@ -130,7 +177,11 @@ func Init(path, data string) (bool, error) {
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	if _, e = f.WriteString("# OpenSlot configuration. Keep this file with your data backups.\n" + raw + "\n"); e != nil {
+	header := "# OpenSlot configuration. Keep this file with your data backups.\n"
+	for _, n := range notes {
+		header += n + "\n"
+	}
+	if _, e = f.WriteString(header + raw + "\n"); e != nil {
 		return false, e
 	}
 	if e = f.Sync(); e != nil {

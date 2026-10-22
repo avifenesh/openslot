@@ -21,6 +21,12 @@ openslot serve --config /path/to/config.env
 
 Initialization never overwrites existing keys. It refuses to generate new keys for a nonempty data directory. Restore that installation's original configuration instead.
 
+To keep the encryption and recovery keys out of `config.env`, set `OPENSLOT_SECRET_STORE` to a command that stores one secret: `init` runs it as `COMMAND NAME` with the secret on stdin, once for `openslot-calnode-encryption-key` and once for `openslot-calnode-recovery-secret`, and writes only a comment in their place. The command must refuse to replace an existing secret. `init` also refuses while `CALNODE_ENCRYPTION_KEY` is already in the environment. The server then reads both keys from its environment, so start it through whatever supplies them (a keyring wrapper or systemd `LoadCredential=`).
+
+```sh
+OPENSLOT_SECRET_STORE="cred-set --new" openslot init --config /path/to/config.env
+```
+
 ## Useful commands
 
 ```sh
