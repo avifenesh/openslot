@@ -231,7 +231,17 @@ test('booking admin filters, details, reschedule and cancellation', async ({page
  await row.getByRole('button',{name:'Reschedule',exact:true}).click();
  await expect(page.getByText(/Reschedule · Admin Guest/)).toBeVisible();
  await page.getByRole('button',{name:'Pick a date'}).click();
- const day = new Date(slots[0].start).getUTCDate();
+ const targetDate = new Date(slots[0].start);
+ const currentMonth = await page.evaluate(() => {
+  const now = new Date();
+  return now.getFullYear() * 12 + now.getMonth();
+ });
+ const monthsAhead = targetDate.getUTCFullYear() * 12 + targetDate.getUTCMonth() - currentMonth;
+ for (let month = 0; month < monthsAhead; month++) {
+  await page.getByRole('button',{name:'Next',exact:true}).click();
+ }
+ await expect(page.getByText(targetDate.toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'}),{exact:true})).toBeVisible();
+ const day = targetDate.getUTCDate();
  await page.locator('[data-bits-day]:not([data-disabled]):not([data-outside-month])').filter({hasText:new RegExp(`^${day}$`)}).click();
  const slotButton = page.getByRole('button',{name:/^\d{1,2}:\d{2}/}).last();
  await slotButton.click();
