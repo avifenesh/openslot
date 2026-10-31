@@ -31,6 +31,7 @@ openslot doctor
 - **Meeting management.** Different meeting types, intake questions, rescheduling, cancellation, teams, and host routing.
 - **Calendar connections.** Google Calendar, Microsoft 365, iCloud, Fastmail, and other CalDAV servers.
 - **Email and Notion.** Booking notifications through Gmail, SMTP, or Resend, plus a dedicated Notion bookings database.
+- **Video and payments.** Zoom meetings or LiveKit video rooms with recording, and Stripe payments for paid meeting types.
 - **Your agent.** MCP and REST tools for Codex, Claude Code, Antigravity, Cursor, Gemini CLI, VS Code, and provider-based agents.
 - **Inbox scheduling.** CC a dedicated Gmail address. Your agent checks availability and replies with valid times. Guests choose and book.
 
