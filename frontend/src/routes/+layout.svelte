@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { page } from '$app/stores';
-	import { base } from '$app/paths';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
 	import type { Snippet } from 'svelte';
 	import { Calendar, Clock, Link, Plug, Settings, Sun, Moon, Menu, X, LogOut, Users, Webhook, LayoutDashboard, Video, Mail, Bot } from '@lucide/svelte';
 	import '../app.css';
@@ -18,7 +19,7 @@
 	let moreOpen = $state(false);
 	let mobile = $state(false);
 	let recordingsConfigured = $state(false);
-	const isPublicRoute = $derived(['/login', '/claim', '/forgot-password', '/reset-password', '/invite/[token]'].includes($page.route.id ?? ''));
+	const isPublicRoute = $derived(['/login', '/claim', '/forgot-password', '/reset-password', '/invite/[token]'].includes(page.route.id ?? ''));
 	const navigation = [
 		{ path: '/', label: 'Overview', icon: LayoutDashboard },
 		{ path: '/bookings', label: 'Bookings', icon: Calendar },
@@ -32,7 +33,7 @@
 		{ path: '/share', label: 'Share & embed', icon: Link },
 	];
 	function active(path: string) {
-		return path === '/' ? $page.url.pathname === base || $page.url.pathname === `${base}/` : $page.url.pathname.startsWith(`${base}${path}`);
+		return path === '/' ? page.url.pathname === base || page.url.pathname === `${base}/` : page.url.pathname.startsWith(`${base}${path}`);
 	}
 	function setTheme(value: boolean) {
 		dark = value;

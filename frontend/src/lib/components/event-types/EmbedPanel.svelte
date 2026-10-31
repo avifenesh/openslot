@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 
@@ -7,7 +7,7 @@
 
 	// The widget derives its API base from the script's own origin, so the
 	// instance origin is all the snippet needs.
-	const embedOrigin = $derived($page.url.origin);
+	const embedOrigin = $derived(page.url.origin);
 	const inlineSnippet = $derived(
 		`<script src="${embedOrigin}/embed.js" async><\/script>\n<openslot-booking slug="${slug}"></openslot-booking>`
 	);

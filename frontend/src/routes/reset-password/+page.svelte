@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -12,7 +12,7 @@
 	let error = $state('');
 
 	onMount(() => {
-		token = $page.url.searchParams.get('token') ?? '';
+		token = page.url.searchParams.get('token') ?? '';
 		if (!token) {
 			error = 'This reset link is missing its token. Request a new one below.';
 		}

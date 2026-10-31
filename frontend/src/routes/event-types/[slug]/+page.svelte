@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { base } from '$app/paths';
+	import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
 	import { api, type EventType, type EventTypeHost, type TeamMember, type Team, type CalendarStatus, type ZoomStatus } from '$lib/api';
 	import { currentUser } from '$lib/stores';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -275,7 +276,7 @@
 	let testError   = $state<Partial<Record<MsgKey, string>>>({});
 
 	let allowPhoneCall = $state(false);
-	const slug = $page.params.slug;
+	const slug = page.params.slug;
 
 	async function loadET() {
 		etError = '';

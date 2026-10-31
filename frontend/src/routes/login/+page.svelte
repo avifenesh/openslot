@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -34,7 +34,7 @@
 		link: 'This login link is invalid or has expired. Request a new one below.'
 	};
 
-	const errorKey = $derived($page.url.searchParams.get('error') ?? '');
+	const errorKey = $derived(page.url.searchParams.get('error') ?? '');
 	const oauthError = $derived(errorKey ? (oauthErrorMessages[errorKey] ?? 'An error occurred. Please try again.') : '');
 
 	onMount(async () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
  import { onMount } from 'svelte';
- import { base } from '$app/paths';
+ import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
  import { Plug, Copy, Download, ArrowRight, ExternalLink, Check, Search, RefreshCw } from '@lucide/svelte';
  import { Button } from '$lib/components/ui/button';
  import { Input } from '$lib/components/ui/input';

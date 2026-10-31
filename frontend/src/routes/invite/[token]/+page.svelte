@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 
-	let token = $derived($page.params.token);
+	let token = $derived(page.params.token);
 	let inviteEmail = $state('');
 	let valid = $state<boolean | null>(null);
 

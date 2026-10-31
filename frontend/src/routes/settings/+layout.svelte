@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { base } from '$app/paths';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
 	import { currentUser } from '$lib/stores';
 	import type { Snippet } from 'svelte';
 
@@ -38,7 +39,7 @@
 						{item.section}
 					</li>
 				{/if}
-				{@const active = $page.url.pathname.startsWith(item.href)}
+				{@const active = page.url.pathname.startsWith(item.href)}
 				<li>
 					<a
 						href={item.href}

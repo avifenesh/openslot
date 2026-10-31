@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { api, type CalendarStatus, type ZoomStatus, type CalendarPick, type CalendarConnection } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -118,10 +118,10 @@
    google_setup:'Google rejected the app credentials. Import the matching client file in Google setup, then connect again.',
    google_failed:'Google could not finish the connection. Start a new connection and approve the requested access.'
   };
-  googleError=googleErrors[$page.url.searchParams.get('error') || ''] || '';
-		justConnected = $page.url.searchParams.get('connected') === 'true';
-		caldavOpen = $page.url.searchParams.get('provider') === 'caldav';
-		zoomJustConnected = $page.url.searchParams.get('zoom') === 'connected';
+  googleError=googleErrors[page.url.searchParams.get('error') || ''] || '';
+		justConnected = page.url.searchParams.get('connected') === 'true';
+		caldavOpen = page.url.searchParams.get('provider') === 'caldav';
+		zoomJustConnected = page.url.searchParams.get('zoom') === 'connected';
 		load();
 		loadZoom();
 	});

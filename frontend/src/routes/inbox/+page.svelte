@@ -1,6 +1,7 @@
 <script lang="ts">
  import { onMount } from 'svelte';
- import { base } from '$app/paths';
+ import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
  import { api, type EventType } from '$lib/api';
  import { currentUser } from '$lib/stores';
  import { Button, buttonVariants } from '$lib/components/ui/button';

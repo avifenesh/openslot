@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { base } from '$app/paths';
+	import { resolve } from '$app/paths';
+	const base = resolve('/').replace(/\/$/, '');
 	import { ArrowRight, Calendar, Check, Clock, Copy, ExternalLink, Link, Plus, Plug, Code } from '@lucide/svelte';
 	import { api, type CalendarStatus, type AvailabilityRule, type EventType, type Booking } from '$lib/api';
 	import { currentUser, authStatus } from '$lib/stores';
