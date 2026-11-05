@@ -29,7 +29,7 @@ jobs:
           cache: true
       - name: Frontend checks and build
         working-directory: frontend
-        run: pnpm install --frozen-lockfile && pnpm check && pnpm build
+        run: pnpm install --frozen-lockfile && pnpm check && pnpm check:canary && pnpm build
       - name: NS8 UI build
         working-directory: packaging/ns8/ui
         run: |
@@ -47,3 +47,13 @@ jobs:
             exit 1
           fi
           go build ./...
+      - name: Third-party notices are current
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          python3 scripts/collect-licenses.py
+          git diff --exit-code -- internal/licenseinfo/ || {
+            echo 'Run python3 scripts/collect-licenses.py and commit internal/licenseinfo/.' >&2
+            exit 1
+          }

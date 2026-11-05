@@ -12,6 +12,14 @@ served under `/admin/`. Public booking pages are server-rendered Go templates
   `//go:embed all:build`). To see frontend changes in the running app: rebuild
   the frontend (`pnpm build` in `frontend/`) **and** rebuild/restart the Go
   binary — restarting Go alone won't pick up new assets.
+- `pnpm check` type-checks with TypeScript 7 (`svelte-check --tsgo`); `typescript`
+  stays on 6 because svelte-check uses its API. Under `--tsgo`, one component that
+  compiles to invalid TS (e.g. `*/` inside an `@component` comment) makes the whole
+  check report 0 errors. CI's `pnpm check:canary` plants a type error to catch that;
+  if it fails, run `pnpm exec svelte-check --tsconfig ./tsconfig.json` (TS 6) to find
+  the file.
+- After a dependency change, run `python3 scripts/collect-licenses.py` and commit
+  `internal/licenseinfo/`; CI fails when the notices are stale, and so does a release.
 
 ## UI styling — required check
 

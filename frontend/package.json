@@ -14,7 +14,8 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check": "node -e \"require('node:fs').rmSync('.svelte-kit/.svelte-check',{recursive:true,force:true})\" && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check:canary": "node scripts/check-canary.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test:visual": "PLAYWRIGHT_BROWSERS_PATH=.playwright vitest run",
