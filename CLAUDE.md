@@ -18,7 +18,7 @@ served under `/admin/`. Public booking pages are server-rendered Go templates
   check report 0 errors. CI's `pnpm check:canary` plants a type error to catch that;
   if it fails, run `pnpm exec svelte-check --tsconfig ./tsconfig.json` (TS 6) to find
   the file.
-- After a dependency change, run `python3 scripts/collect-licenses.py` and commit
+- After a dependency change, run `go mod download all && python3 scripts/collect-licenses.py` and commit
   `internal/licenseinfo/`; CI fails when the notices are stale, and so does a release.
 
 ## UI styling — required check

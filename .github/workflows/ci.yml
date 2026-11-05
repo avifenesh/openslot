@@ -51,7 +51,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go mod download
+          # `all`: the collector reads every module in `go list -m all`, and a
+          # plain `go mod download` skips the ones the build graph prunes.
+          go mod download all
           python3 scripts/collect-licenses.py
           git diff --exit-code -- internal/licenseinfo/ || {
             echo 'Run python3 scripts/collect-licenses.py and commit internal/licenseinfo/.' >&2
