@@ -9,6 +9,9 @@ output=$(cd "$output" && pwd)
 python3 scripts/collect-licenses.py
 commit=$(git rev-parse HEAD)
 if [[ -n $(git status --porcelain) && ${OPENSLOT_ALLOW_DIRTY_BUILD:-0} != 1 ]]; then
+ if [[ -n $(git status --porcelain -- internal/licenseinfo) ]]; then
+  echo 'The third-party notices changed with the dependencies. Commit internal/licenseinfo/ and run the release again.' >&2
+ fi
  echo 'Release builds require a clean checkout. Set OPENSLOT_ALLOW_DIRTY_BUILD=1 only for local validation.' >&2
  exit 1
 fi

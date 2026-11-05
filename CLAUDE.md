@@ -19,7 +19,8 @@ served under `/admin/`. Public booking pages are server-rendered Go templates
   if it fails, run `pnpm exec svelte-check --tsconfig ./tsconfig.json` (TS 6) to find
   the file.
 - After a dependency change, run `go mod download all && python3 scripts/collect-licenses.py` and commit
-  `internal/licenseinfo/`; CI fails when the notices are stale, and so does a release.
+  `internal/licenseinfo/`. CI does not check it (Dependabot PRs could not pass), but
+  `scripts/build-release.sh` regenerates it and stops when it changed.
 
 ## UI styling — required check
 

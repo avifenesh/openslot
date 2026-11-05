@@ -47,15 +47,3 @@ jobs:
             exit 1
           fi
           go build ./...
-      - name: Third-party notices are current
-        shell: bash
-        run: |
-          set -euo pipefail
-          # `all`: the collector reads every module in `go list -m all`, and a
-          # plain `go mod download` skips the ones the build graph prunes.
-          go mod download all
-          python3 scripts/collect-licenses.py
-          git diff --exit-code -- internal/licenseinfo/ || {
-            echo 'Run python3 scripts/collect-licenses.py and commit internal/licenseinfo/.' >&2
-            exit 1
-          }
