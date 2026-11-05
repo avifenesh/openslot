@@ -16,13 +16,13 @@ served under `/admin/`. Public booking pages are server-rendered Go templates
   stays on 6 because svelte-check uses its API. Under `--tsgo`, one component that
   compiles to invalid TS (e.g. `*/` inside an `@component` comment) makes the whole
   check report 0 errors. CI's `pnpm check:canary` plants a type error to catch that;
-  if it fails, run `pnpm exec svelte-check --tsconfig ./tsconfig.json` (TS 6) to find
-  the file.
-- After a dependency change, run `go mod download all && python3 scripts/collect-licenses.py` and commit
-  `internal/licenseinfo/`. Run it on a fresh `pnpm install --frozen-lockfile` (delete
-  `frontend/node_modules` first): it reads `node_modules/.pnpm`, where pnpm keeps
-  replaced versions, so a reused install lists packages the lockfile no longer has. CI does not check it (Dependabot PRs could not pass), but
-  `scripts/build-release.sh` regenerates it and stops when it changed.
+  when it fails it prints the syntax errors in the generated copy of the component.
+- Third-party notices (`internal/licenseinfo/`) come from the installed modules.
+  `scripts/build-release.sh` regenerates them (after `go mod download all` and a
+  `pnpm install` that drops replaced versions) and stops when they changed: commit
+  them and run it again. CI does not check them, since Dependabot PRs could not pass.
+  Collect on Linux x64 (glibc): other platforms install different native packages,
+  some without a license file or supplement.
 
 ## UI styling — required check
 

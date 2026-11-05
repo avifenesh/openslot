@@ -39,4 +39,4 @@ OPENSLOT_RELEASE_PLATFORMS=linux/amd64 scripts/build-release.sh v0.1.0
 
 `OPENSLOT_ALLOW_DIRTY_BUILD=1` is for local validation only. Published assets must come from the merged clean commit. Do not include `.env`, SQLite files, uploaded data, or validation screenshots in release archives.
 
-Release packaging also needs Python 3 to collect dependency notices. Run `go mod download all` at the repository root and `pnpm install --frozen-lockfile` in `frontend/` before collecting notices with `python3 scripts/collect-licenses.py`. Commit updated notice files before a release build. End users do not need Python.
+Release packaging also needs Python 3 to collect dependency notices. `scripts/build-release.sh` runs `go mod download all` at the repository root and `pnpm install --frozen-lockfile --config.modules-cache-max-age=0` in `frontend/` (so versions the lockfile replaced are removed) before it collects notices with `python3 scripts/collect-licenses.py`. Collect on Linux x64 with glibc: other platforms install different native packages. Commit updated notice files before a release build. End users do not need Python.

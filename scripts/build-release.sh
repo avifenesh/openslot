@@ -6,6 +6,10 @@ version=${1:?usage: scripts/build-release.sh v0.1.0 [output-directory]}
 output=${2:-dist}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
+# The notices come from the installed modules: download every Go module and
+# reinstall the frontend so pnpm drops versions the lockfile replaced.
+go mod download all
+(cd frontend && pnpm install --frozen-lockfile --config.modules-cache-max-age=0)
 python3 scripts/collect-licenses.py
 commit=$(git rev-parse HEAD)
 if [[ -n $(git status --porcelain) && ${OPENSLOT_ALLOW_DIRTY_BUILD:-0} != 1 ]]; then

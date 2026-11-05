@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "check": "node -e \"require('node:fs').rmSync('.svelte-kit/.svelte-check',{recursive:true,force:true})\" && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check": "node -e \"for (const p of ['.svelte-kit/.svelte-check', 'src/__tsgo_canary__.ts']) require('node:fs').rmSync(p, { recursive: true, force: true })\" && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
     "check:canary": "node scripts/check-canary.mjs",
     "build": "vite build",
     "preview": "vite preview",
