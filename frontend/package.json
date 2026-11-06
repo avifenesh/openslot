@@ -9,7 +9,8 @@
       "msw"
     ],
     "overrides": {
-      "cookie@^0.6.0": "^0.7.2"
+      "cookie@^0.6.0": "^0.7.2",
+      "@sveltejs/vite-plugin-svelte>deepmerge": "4.1.2"
     }
   },
   "scripts": {
